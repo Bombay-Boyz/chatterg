@@ -128,7 +128,7 @@ fn last_accepted_answer_completes() {
         panic!("expected second question");
     };
 
-    let Submission::Complete = engine.submit("42".into()) else {
+    let Submission::Complete(_) = engine.submit("42".into()) else {
         panic!("expected completion");
     };
 }

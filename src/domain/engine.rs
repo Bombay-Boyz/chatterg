@@ -29,7 +29,7 @@ impl Engine {
 
     pub fn submit(self, response: String) -> Submission {
         let Some(question) = self.current().cloned() else {
-            return Submission::Complete;
+            return Submission::Complete(self);
         };
 
         let Self { questionnaire, position, conversation } = self;
@@ -64,16 +64,14 @@ impl Engine {
 
         match next.current().cloned() {
             Some(question) => Submission::Next(next, question),
-            None => Submission::Complete,
+            None => Submission::Complete(next),
         }
     }
 
     fn apply_failure(self, question: Question) -> Submission {
         match question.on_failure {
             FailurePolicy::Abort => Submission::Aborted(self),
-
             FailurePolicy::Skip | FailurePolicy::Continue => self.advance(),
-
             FailurePolicy::Unknown => Submission::Unknown(self),
         }
     }
@@ -89,5 +87,5 @@ pub enum Submission {
     Retry(Engine, Question),
     Aborted(Engine),
     Unknown(Engine),
-    Complete,
+    Complete(Engine),
 }
