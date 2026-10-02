@@ -56,4 +56,6 @@ async fn a2a_discovery_reads_agent_card() {
     let capabilities = transport.discover(&target).await.unwrap();
 
     assert_eq!(capabilities.protocols, vec![chatterg::transport::Protocol::A2a]);
+
+    assert_eq!(capabilities.endpoint.as_str(), format!("{}/a2a", server.url()));
 }

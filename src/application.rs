@@ -19,6 +19,8 @@ where
     S: Store + 'static,
 {
     let target = Url::parse(target)?;
+    let capabilities = transport.discover(&target).await?;
+    let endpoint = capabilities.endpoint;
 
     loop {
         let question = match engine.start() {
@@ -32,11 +34,9 @@ where
             }
         };
 
-        transport.discover(&target).await?;
-
         let message = Message { text: question.question.clone() };
 
-        let response = transport.send(&target, message).await?;
+        let response = transport.send(&endpoint, message).await?;
 
         match engine.submit(response.text) {
             Submission::Next(next, _) => {

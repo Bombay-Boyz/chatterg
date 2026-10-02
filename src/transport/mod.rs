@@ -5,6 +5,7 @@ use url::Url;
 #[derive(Debug, Clone)]
 pub struct Capabilities {
     pub protocols: Vec<Protocol>,
+    pub endpoint: Url,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

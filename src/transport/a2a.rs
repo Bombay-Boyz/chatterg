@@ -63,7 +63,7 @@ impl Transport for A2aTransport {
             return Err(TransportError::UnsupportedProtocol);
         }
 
-        Ok(Capabilities { protocols: vec![Protocol::A2a] })
+        Ok(Capabilities { protocols: vec![Protocol::A2a], endpoint })
     }
 
     async fn send(&self, _target: &Url, _message: Message) -> Result<Response, TransportError> {
