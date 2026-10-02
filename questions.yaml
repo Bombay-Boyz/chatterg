@@ -1,0 +1,37 @@
+questions:
+
+  - id: company_name
+    question: "What is your company name?"
+    required: true
+    type: string
+    max_followups: 2
+
+  - id: headquarters
+    question: "Where is your headquarters?"
+    required: true
+    type: string
+    max_followups: 2
+
+  - id: products
+    question: "What products do you offer?"
+    required: true
+    type: text
+    max_followups: 3
+
+  - id: countries
+    question: "Which countries do you currently operate in?"
+    required: true
+    type: list
+    max_followups: 3
+
+  - id: commercial_status
+    question: "Are your products commercially available?"
+    required: true
+    type: enum
+    values:
+      - commercial
+      - pilot
+      - prototype
+      - research
+      - unknown
+    max_followups: 3
