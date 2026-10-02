@@ -1,7 +1,6 @@
 use async_trait::async_trait;
-use url::Url;
-
 use thiserror::Error;
+use url::Url;
 
 #[derive(Debug, Clone)]
 pub struct Capabilities {
@@ -41,10 +40,9 @@ pub enum TransportError {
 pub trait Transport: Send + Sync {
     async fn discover(&self, target: &Url) -> Result<Capabilities, TransportError>;
 
-    async fn send(&self, message: Message) -> Result<Response, TransportError>;
+    async fn send(&self, target: &Url, message: Message) -> Result<Response, TransportError>;
 }
 
 pub mod a2a;
 pub mod http;
-
 pub mod mock;

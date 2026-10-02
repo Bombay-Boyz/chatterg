@@ -37,7 +37,7 @@ impl Transport for HttpTransport {
         }
     }
 
-    async fn send(&self, _message: Message) -> Result<Response, TransportError> {
+    async fn send(&self, _target: &Url, _message: Message) -> Result<Response, TransportError> {
         Err(TransportError::UnsupportedProtocol)
     }
 }

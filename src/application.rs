@@ -36,7 +36,7 @@ where
 
         let message = Message { text: question.question.clone() };
 
-        let response = transport.send(message).await?;
+        let response = transport.send(&target, message).await?;
 
         match engine.submit(response.text) {
             Submission::Next(next, _) => {

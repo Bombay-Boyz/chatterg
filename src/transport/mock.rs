@@ -22,7 +22,7 @@ impl Transport for MockTransport {
         Ok(Capabilities { protocols: vec![Protocol::Http] })
     }
 
-    async fn send(&self, _message: Message) -> Result<Response, TransportError> {
+    async fn send(&self, _target: &Url, _message: Message) -> Result<Response, TransportError> {
         let mut responses = self
             .responses
             .lock()
