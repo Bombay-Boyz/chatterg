@@ -30,10 +30,12 @@ async fn mock_bot_completes_questionnaire() {
 
 #[tokio::test]
 async fn a2a_discovery_reads_agent_card() {
-    use chatterg::transport::{Transport, a2a::A2aTransport};
+    use chatterg::transport::{Protocol, Transport, a2a::A2aTransport};
     use url::Url;
 
     let mut server = mockito::Server::new_async().await;
+
+    let endpoint = format!("{}/a2a", server.url());
 
     let _mock = server
         .mock("GET", "/.well-known/agent-card.json")
@@ -43,9 +45,15 @@ async fn a2a_discovery_reads_agent_card() {
             r#"{{
                 "name": "Test Agent",
                 "description": "Test",
-                "url": "{}/a2a"
+                "supportedInterfaces": [
+                    {{
+                        "url": "{}",
+                        "protocolBinding": "JSONRPC",
+                        "protocolVersion": "1.0"
+                    }}
+                ]
             }}"#,
-            server.url()
+            endpoint
         ))
         .create_async()
         .await;
@@ -55,7 +63,6 @@ async fn a2a_discovery_reads_agent_card() {
 
     let capabilities = transport.discover(&target).await.unwrap();
 
-    assert_eq!(capabilities.protocols, vec![chatterg::transport::Protocol::A2a]);
-
-    assert_eq!(capabilities.endpoint.as_str(), format!("{}/a2a", server.url()));
+    assert_eq!(capabilities.protocols, vec![Protocol::A2a]);
+    assert_eq!(capabilities.endpoint.as_str(), endpoint);
 }
