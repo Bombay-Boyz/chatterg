@@ -8,6 +8,13 @@ pub struct Questionnaire {
 }
 
 impl Questionnaire {
+    pub fn from_path(
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let data = std::fs::read_to_string(path)?;
+        Ok(serde_yaml::from_str(&data)?)
+    }
+
     pub fn required(&self) -> impl Iterator<Item = &Question> {
         self.questions.iter().filter(|question| question.required)
     }
