@@ -1,0 +1,2490 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index e1e4199..6fe4294 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -77,6 +77,21 @@ dependencies = [
+  "serde_json",
+ ]
+ 
++[[package]]
++name = "assert_cmd"
++version = "2.2.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2aa3a22042e45de04255c7bf3626e239f450200fd0493c1e382263544b20aea6"
++dependencies = [
++ "anstyle",
++ "bstr",
++ "libc",
++ "predicates",
++ "predicates-core",
++ "predicates-tree",
++ "wait-timeout",
++]
++
+ [[package]]
+ name = "async-trait"
+ version = "0.1.92"
+@@ -94,6 +109,12 @@ version = "1.1.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+ 
++[[package]]
++name = "autocfg"
++version = "1.5.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
++
+ [[package]]
+ name = "aws-lc-rs"
+ version = "1.18.1"
+@@ -129,6 +150,17 @@ version = "2.13.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
+ 
++[[package]]
++name = "bstr"
++version = "1.13.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6bb31b46c14244e20ee9984b11bf5c992b91fb6939fea616e3512c8baecdbe5f"
++dependencies = [
++ "memchr",
++ "regex-automata",
++ "serde_core",
++]
++
+ [[package]]
+ name = "bumpalo"
+ version = "3.20.3"
+@@ -181,9 +213,11 @@ name = "chatterg"
+ version = "0.1.0"
+ dependencies = [
+  "anyhow",
++ "assert_cmd",
+  "async-trait",
+  "clap",
+  "mockito",
++ "predicates",
+  "pretty_assertions",
+  "reqwest",
+  "rusqlite",
+@@ -319,6 +353,12 @@ version = "0.1.13"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
+ 
++[[package]]
++name = "difflib"
++version = "0.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
++
+ [[package]]
+ name = "displaydoc"
+ version = "0.2.7"
+@@ -390,6 +430,15 @@ version = "0.1.14"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
+ 
++[[package]]
++name = "float-cmp"
++version = "0.10.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b09cf3155332e944990140d967ff5eceb70df778b34f77d8075db46e4704e6d8"
++dependencies = [
++ "num-traits",
++]
++
+ [[package]]
+ name = "fnv"
+ version = "1.0.7"
+@@ -976,6 +1025,12 @@ version = "1.0.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
+ 
++[[package]]
++name = "normalize-line-endings"
++version = "0.3.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
++
+ [[package]]
+ name = "nu-ansi-term"
+ version = "0.50.3"
+@@ -985,6 +1040,15 @@ dependencies = [
+  "windows-sys 0.61.2",
+ ]
+ 
++[[package]]
++name = "num-traits"
++version = "0.2.19"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
++dependencies = [
++ "autocfg",
++]
++
+ [[package]]
+ name = "once_cell"
+ version = "1.21.4"
+@@ -1062,6 +1126,36 @@ dependencies = [
+  "zerocopy",
+ ]
+ 
++[[package]]
++name = "predicates"
++version = "3.1.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ada8f2932f28a27ee7b70dd6c1c39ea0675c55a36879ab92f3a715eaa1e63cfe"
++dependencies = [
++ "anstyle",
++ "difflib",
++ "float-cmp",
++ "normalize-line-endings",
++ "predicates-core",
++ "regex",
++]
++
++[[package]]
++name = "predicates-core"
++version = "1.0.10"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cad38746f3166b4031b1a0d39ad9f954dd291e7854fcc0eed52ee41a0b50d144"
++
++[[package]]
++name = "predicates-tree"
++version = "1.0.13"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d0de1b847b39c8131db0467e9df1ff60e6d0562ab8e9a16e568ad0fdb372e2f2"
++dependencies = [
++ "predicates-core",
++ "termtree",
++]
++
+ [[package]]
+ name = "pretty_assertions"
+ version = "1.4.1"
+@@ -1742,6 +1836,12 @@ dependencies = [
+  "windows-sys 0.61.2",
+ ]
+ 
++[[package]]
++name = "termtree"
++version = "0.5.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
++
+ [[package]]
+ name = "thiserror"
+ version = "2.0.21"
+@@ -2005,6 +2105,15 @@ version = "0.2.15"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+ 
++[[package]]
++name = "wait-timeout"
++version = "0.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "09ac3b126d3914f9849036f826e054cbabdc8519970b8998ddaf3b5bd3c65f11"
++dependencies = [
++ "libc",
++]
++
+ [[package]]
+ name = "walkdir"
+ version = "2.5.0"
+diff --git a/Cargo.toml b/Cargo.toml
+index e381904..c86419c 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -22,3 +22,5 @@ url = "2.5.8"
+ pretty_assertions = "1.4.1"
+ tempfile = "3.27.0"
+ mockito = "1.7.0"
++assert_cmd = "2.2.2"
++predicates = "3.1.4"
+diff --git a/scripts/gate.sh b/scripts/gate.sh
+new file mode 100755
+index 0000000..5fd0b8e
+--- /dev/null
++++ b/scripts/gate.sh
+@@ -0,0 +1,6 @@
++#!/usr/bin/env bash
++set -euo pipefail
++cargo fmt
++cargo test --all-targets --all-features
++cargo clippy --all-targets --all-features -- -D warnings
++git diff --check
+diff --git a/scripts/test-nxtbrane.sh b/scripts/test-nxtbrane.sh
+new file mode 100755
+index 0000000..7a79fc3
+--- /dev/null
++++ b/scripts/test-nxtbrane.sh
+@@ -0,0 +1,24 @@
++#!/usr/bin/env bash
++# Live check against the real NxTBrane agent. Not part of `cargo test`.
++set -euo pipefail
++
++TARGET="${1:-https://flowmarket.social/nxtbrane}"
++DB="$(mktemp -u /tmp/chatterg-nxtbrane.XXXXXX.db)"
++trap 'rm -f "$DB"' EXIT
++
++echo "== discovery =="
++curl -fsS "${TARGET%/}/.well-known/agent-card.json" | python3 -m json.tool | head -40
++
++echo "== run 1 =="
++cargo run -q -- "$TARGET" questions.yaml --store "$DB"
++
++echo "== persisted conversation =="
++python3 - "$DB" <<'PY'
++import json, sqlite3, sys
++row = sqlite3.connect(sys.argv[1]).execute("select data from conversations").fetchone()
++c = json.loads(row[0])
++print("state:", c["state"], "position:", c["position"], "messages_sent:", c["messages_sent"])
++PY
++
++echo "== run 2 (must resume, not repeat) =="
++cargo run -q -- "$TARGET" questions.yaml --store "$DB"
+diff --git a/src/application.rs b/src/application.rs
+index 310569a..27b8efb 100644
+--- a/src/application.rs
++++ b/src/application.rs
+@@ -1,65 +1,79 @@
+ use std::sync::Arc;
+ 
++use thiserror::Error;
+ use url::Url;
+ 
+ use crate::{
+-    domain::{Engine, EngineState, Submission},
+-    storage::Store,
+-    transport::{Message, Transport},
++    domain::{DomainError, Engine, EngineState, Questionnaire, Submission},
++    storage::{StorageError, Store},
++    transport::{Message, Transport, TransportError},
+ };
+ 
++#[derive(Debug, Error)]
++pub enum ApplicationError {
++    #[error("invalid target URL: {0}")]
++    InvalidTarget(#[from] url::ParseError),
++
++    #[error(transparent)]
++    Domain(#[from] DomainError),
++
++    #[error(transparent)]
++    Transport(#[from] TransportError),
++
++    #[error(transparent)]
++    Storage(#[from] StorageError),
++}
++
++/// Runs (or resumes) the questionnaire.
++///
++/// If the store already holds a conversation the engine is rebuilt from it and
++/// continues from the persisted position; otherwise a new run starts.
+ pub async fn run<T, S>(
+-    mut engine: Engine,
++    questionnaire: Questionnaire,
+     target: &str,
+     transport: &T,
+     store: Arc<S>,
+-) -> Result<Engine, Box<dyn std::error::Error>>
++) -> Result<Engine, ApplicationError>
+ where
+     T: Transport,
+     S: Store + 'static,
+ {
+     let target = Url::parse(target)?;
+-    let capabilities = transport.discover(&target).await?;
+-    let endpoint = capabilities.endpoint;
++
++    let mut engine = match store.load().await? {
++        Some(conversation) => Engine::resume(questionnaire, conversation)?,
++        None => Engine::new(questionnaire),
++    };
++
++    if !matches!(engine.start(), EngineState::Asking(_)) {
++        return Ok(engine);
++    }
++
++    let endpoint = transport.discover(&target).await?.endpoint;
+ 
+     loop {
+         let question = match engine.start() {
+             EngineState::Asking(question) => question,
+-            EngineState::Complete => {
++            EngineState::Ready | EngineState::Complete | EngineState::Aborted => {
+                 store.save(engine.conversation()).await?;
+                 return Ok(engine);
+             }
+-            EngineState::Ready => {
+-                return Err("engine is not ready".into());
+-            }
+         };
+ 
+-        let message = Message { text: question.question.clone() };
++        let message = Message {
++            id: format!("chatterg-{}", engine.conversation().next_message_number()),
++            text: question.question.clone(),
++        };
+ 
+         let response = transport.send(&endpoint, message).await?;
+ 
+         match engine.submit(response.text) {
+-            Submission::Next(next, _) => {
+-                engine = next;
+-                store.save(engine.conversation()).await?;
+-            }
+-
+-            Submission::Retry(next, _) => {
+-                engine = next;
+-                store.save(engine.conversation()).await?;
+-            }
+-
+-            Submission::Aborted(next) => {
++            Submission::Next(next, _) | Submission::Retry(next, _) => {
+                 store.save(next.conversation()).await?;
+-                return Ok(next);
+-            }
+-
+-            Submission::Unknown(next) => {
+-                store.save(next.conversation()).await?;
+-                return Ok(next);
++                engine = next;
+             }
+ 
+-            Submission::Complete(next) => {
++            Submission::Aborted(next) | Submission::Unknown(next) | Submission::Complete(next) => {
+                 store.save(next.conversation()).await?;
+                 return Ok(next);
+             }
+diff --git a/src/domain/conversation.rs b/src/domain/conversation.rs
+index 875cfcb..82fc5e8 100644
+--- a/src/domain/conversation.rs
++++ b/src/domain/conversation.rs
+@@ -11,17 +11,27 @@ pub enum State {
+     Ready,
+     Waiting(QuestionId),
+     Complete,
++    /// The run ended early (abort or unknown policy). Terminal: never resumed.
++    Aborted,
+ }
+ 
+ #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+ pub struct Conversation {
+     pub state: State,
+     pub answers: Vec<AnswerRecord>,
++
++    /// Index of the question currently being asked. Authoritative; never derived
++    /// from `answers.len()`.
++    pub position: usize,
++
++    /// Number of messages sent *and answered*. The next message id is this + 1,
++    /// so an undelivered message keeps its id when retried after a restart.
++    pub messages_sent: u64,
+ }
+ 
+ impl Default for Conversation {
+     fn default() -> Self {
+-        Self { state: State::Ready, answers: Vec::new() }
++        Self { state: State::Ready, answers: Vec::new(), position: 0, messages_sent: 0 }
+     }
+ }
+ 
+@@ -30,6 +40,11 @@ impl Conversation {
+         Self::default()
+     }
+ 
++    /// Sequence number to use for the next outgoing message (1-based).
++    pub fn next_message_number(&self) -> u64 {
++        self.messages_sent + 1
++    }
++
+     pub fn ask(self, question: &Question) -> Self {
+         Self { state: State::Waiting(question.id.clone()), ..self }
+     }
+@@ -61,7 +76,12 @@ impl Conversation {
+             .chain(std::iter::once(updated.clone()))
+             .collect();
+ 
+-        let conversation = Self { state: State::Ready, answers };
++        let conversation = Self {
++            state: State::Ready,
++            answers,
++            position: self.position,
++            messages_sent: self.messages_sent + 1,
++        };
+ 
+         match status {
+             ValidationStatus::Accepted => Transition::Accepted(conversation),
+diff --git a/src/domain/engine.rs b/src/domain/engine.rs
+index f294aa4..1fcccd6 100644
+--- a/src/domain/engine.rs
++++ b/src/domain/engine.rs
+@@ -1,5 +1,6 @@
+ use super::{
+-    conversation::{Conversation, Transition},
++    conversation::{Conversation, State, Transition},
++    error::DomainError,
+     question::{FailurePolicy, Question},
+     questionnaire::Questionnaire,
+ };
+@@ -9,44 +10,74 @@ pub enum EngineState {
+     Ready,
+     Asking(Question),
+     Complete,
++    Aborted,
+ }
+ 
++/// Drives a questionnaire. The position lives in [`Conversation`] so that it is
++/// persisted atomically with the answers.
+ #[derive(Debug, Clone)]
+ pub struct Engine {
+     questionnaire: Questionnaire,
+-    position: usize,
+     conversation: Conversation,
+ }
+ 
+ impl Engine {
+     pub fn new(questionnaire: Questionnaire) -> Self {
+-        Self { questionnaire, position: 0, conversation: Conversation::default() }
++        Self { questionnaire, conversation: Conversation::default() }
++    }
++
++    /// Rebuilds an engine from persisted state, continuing exactly where it stopped.
++    pub fn resume(
++        questionnaire: Questionnaire,
++        conversation: Conversation,
++    ) -> Result<Self, DomainError> {
++        let len = questionnaire.questions.len();
++
++        if conversation.position > len {
++            return Err(DomainError::InvalidPosition { position: conversation.position, len });
++        }
++
++        for record in &conversation.answers {
++            if !questionnaire.questions.iter().any(|question| question.id == record.question_id) {
++                return Err(DomainError::QuestionNotFound(record.question_id.as_str().to_owned()));
++            }
++        }
++
++        Ok(Self { questionnaire, conversation })
+     }
+ 
+     pub fn start(&self) -> EngineState {
+-        self.current().cloned().map(EngineState::Asking).unwrap_or(EngineState::Complete)
++        match self.conversation.state {
++            State::Complete => EngineState::Complete,
++            State::Aborted => EngineState::Aborted,
++            _ => self.current().cloned().map(EngineState::Asking).unwrap_or(EngineState::Complete),
++        }
++    }
++
++    pub fn position(&self) -> usize {
++        self.conversation.position
+     }
+ 
+     pub fn submit(self, response: String) -> Submission {
+-        let Some(question) = self.current().cloned() else {
+-            return Submission::Complete(self);
++        let question = match self.start() {
++            EngineState::Asking(question) => question,
++            EngineState::Aborted => return Submission::Aborted(self),
++            EngineState::Ready | EngineState::Complete => return Submission::Complete(self),
+         };
+ 
+-        let Self { questionnaire, position, conversation } = self;
++        let Self { questionnaire, conversation } = self;
+ 
+         match conversation.receive(&question, response) {
+-            Transition::Accepted(conversation) => {
+-                Self { questionnaire, position, conversation }.advance()
+-            }
++            Transition::Accepted(conversation) => Self { questionnaire, conversation }.advance(),
+ 
+             Transition::FollowUp(conversation) => {
+-                Submission::Retry(Self { questionnaire, position, conversation }, question)
++                Submission::Retry(Self { questionnaire, conversation }, question)
+             }
+ 
+             Transition::Rejected(conversation)
+             | Transition::Unverified(conversation)
+             | Transition::Unknown(conversation) => {
+-                Self { questionnaire, position, conversation }.apply_failure(question)
++                Self { questionnaire, conversation }.apply_failure(question)
+             }
+         }
+     }
+@@ -55,29 +86,33 @@ impl Engine {
+         &self.conversation
+     }
+ 
+-    fn advance(self) -> Submission {
+-        let next = Self {
+-            questionnaire: self.questionnaire,
+-            position: self.position + 1,
+-            conversation: self.conversation,
+-        };
++    fn advance(mut self) -> Submission {
++        self.conversation.position += 1;
+ 
+-        match next.current().cloned() {
+-            Some(question) => Submission::Next(next, question),
+-            None => Submission::Complete(next),
++        match self.current().cloned() {
++            Some(question) => Submission::Next(self, question),
++            None => {
++                self.conversation.state = State::Complete;
++                Submission::Complete(self)
++            }
+         }
+     }
+ 
++    fn abort(mut self) -> Self {
++        self.conversation.state = State::Aborted;
++        self
++    }
++
+     fn apply_failure(self, question: Question) -> Submission {
+         match question.on_failure {
+-            FailurePolicy::Abort => Submission::Aborted(self),
++            FailurePolicy::Abort => Submission::Aborted(self.abort()),
+             FailurePolicy::Skip | FailurePolicy::Continue => self.advance(),
+-            FailurePolicy::Unknown => Submission::Unknown(self),
++            FailurePolicy::Unknown => Submission::Unknown(self.abort()),
+         }
+     }
+ 
+     fn current(&self) -> Option<&Question> {
+-        self.questionnaire.questions.get(self.position)
++        self.questionnaire.questions.get(self.conversation.position)
+     }
+ }
+ 
+diff --git a/src/domain/error.rs b/src/domain/error.rs
+index 383eb3a..d53ff92 100644
+--- a/src/domain/error.rs
++++ b/src/domain/error.rs
+@@ -1,3 +1,5 @@
++use std::path::PathBuf;
++
+ use thiserror::Error;
+ 
+ #[derive(Debug, Error)]
+@@ -10,4 +12,21 @@ pub enum DomainError {
+ 
+     #[error("question not found: {0}")]
+     QuestionNotFound(String),
++
++    #[error("stored position {position} is beyond the end of the questionnaire ({len} questions)")]
++    InvalidPosition { position: usize, len: usize },
++
++    #[error("cannot read questionnaire {}: {source}", path.display())]
++    QuestionnaireRead {
++        path: PathBuf,
++        #[source]
++        source: std::io::Error,
++    },
++
++    #[error("invalid questionnaire {}: {source}", path.display())]
++    QuestionnaireParse {
++        path: PathBuf,
++        #[source]
++        source: serde_yaml::Error,
++    },
+ }
+diff --git a/src/domain/mod.rs b/src/domain/mod.rs
+index 19495d5..def3b8b 100644
+--- a/src/domain/mod.rs
++++ b/src/domain/mod.rs
+@@ -12,3 +12,4 @@ pub use question::*;
+ pub use questionnaire::*;
+ 
+ pub use engine::*;
++pub use error::DomainError;
+diff --git a/src/domain/questionnaire.rs b/src/domain/questionnaire.rs
+index 4548ab8..cb117cc 100644
+--- a/src/domain/questionnaire.rs
++++ b/src/domain/questionnaire.rs
+@@ -1,6 +1,8 @@
++use std::{collections::HashSet, path::Path};
++
+ use serde::{Deserialize, Serialize};
+ 
+-use super::question::Question;
++use super::{error::DomainError, question::Question};
+ 
+ #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+ pub struct Questionnaire {
+@@ -8,11 +10,34 @@ pub struct Questionnaire {
+ }
+ 
+ impl Questionnaire {
+-    pub fn from_path(
+-        path: impl AsRef<std::path::Path>,
+-    ) -> Result<Self, Box<dyn std::error::Error>> {
+-        let data = std::fs::read_to_string(path)?;
+-        Ok(serde_yaml::from_str(&data)?)
++    /// Loads and validates a questionnaire. Never falls back to a built-in one.
++    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, DomainError> {
++        let path = path.as_ref();
++
++        let data = std::fs::read_to_string(path)
++            .map_err(|source| DomainError::QuestionnaireRead { path: path.to_owned(), source })?;
++
++        let questionnaire: Self = serde_yaml::from_str(&data)
++            .map_err(|source| DomainError::QuestionnaireParse { path: path.to_owned(), source })?;
++
++        questionnaire.validate()?;
++        Ok(questionnaire)
++    }
++
++    /// Rejects empty questionnaires and duplicate question ids.
++    pub fn validate(&self) -> Result<(), DomainError> {
++        if self.is_empty() {
++            return Err(DomainError::EmptyQuestionnaire);
++        }
++
++        let mut seen = HashSet::new();
++        for question in &self.questions {
++            if !seen.insert(question.id.as_str()) {
++                return Err(DomainError::DuplicateQuestionId(question.id.as_str().to_owned()));
++            }
++        }
++
++        Ok(())
+     }
+ 
+     pub fn required(&self) -> impl Iterator<Item = &Question> {
+diff --git a/src/main.rs b/src/main.rs
+index 4a8bda3..b4f7d81 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -1,12 +1,9 @@
+-use std::sync::Arc;
++use std::{error::Error, path::PathBuf, process::ExitCode, sync::Arc};
+ 
+ use clap::Parser;
+ 
+ use chatterg::{
+-    application,
+-    domain::{Engine, Questionnaire},
+-    output::human,
+-    storage::sqlite::SqliteStore,
++    application, domain::Questionnaire, output::human, storage::sqlite::SqliteStore,
+     transport::a2a::A2aTransport,
+ };
+ 
+@@ -14,34 +11,48 @@ use chatterg::{
+ #[command(name = "chatterg")]
+ #[command(about = "Deterministic bot-to-bot questionnaire client")]
+ struct Cli {
+-    /// Target A2A agent URL.
++    /// Target A2A agent URL (the agent card is fetched from
++    /// `<AGENT_URL>/.well-known/agent-card.json`).
++    #[arg(value_name = "AGENT_URL")]
+     target: String,
+ 
+     /// Questionnaire YAML file.
+-    questions: String,
++    #[arg(value_name = "QUESTIONS_YAML")]
++    questions: PathBuf,
+ 
+-    /// SQLite database path.
+-    #[arg(long, default_value = "chatterg.db")]
+-    store: String,
++    /// SQLite database path. Re-running with the same path resumes the questionnaire.
++    #[arg(long, value_name = "SQLITE_PATH", default_value = "chatterg.db")]
++    store: PathBuf,
+ }
+ 
+-#[tokio::main]
+-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+-    let cli = Cli::parse();
+-
++async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
+     let questionnaire = Questionnaire::from_path(&cli.questions)?;
+-
+-    if questionnaire.is_empty() {
+-        return Err("questionnaire contains no questions".into());
+-    }
+-
+-    let engine = Engine::new(questionnaire);
+-    let transport = A2aTransport::new();
+     let store = Arc::new(SqliteStore::open(&cli.store)?);
++    let transport = A2aTransport::new();
+ 
+-    let engine = application::run(engine, &cli.target, &transport, Arc::clone(&store)).await?;
++    let engine = application::run(questionnaire, &cli.target, &transport, store).await?;
+ 
+     print!("{}", human::render(engine.conversation()));
+ 
+     Ok(())
+ }
++
++#[tokio::main]
++async fn main() -> ExitCode {
++    let cli = Cli::parse();
++
++    match run(cli).await {
++        Ok(()) => ExitCode::SUCCESS,
++        Err(error) => {
++            eprintln!("error: {error}");
++
++            let mut source = error.source();
++            while let Some(cause) = source {
++                eprintln!("  caused by: {cause}");
++                source = cause.source();
++            }
++
++            ExitCode::FAILURE
++        }
++    }
++}
+diff --git a/src/storage/mod.rs b/src/storage/mod.rs
+index ba5c04b..6d26fff 100644
+--- a/src/storage/mod.rs
++++ b/src/storage/mod.rs
+@@ -1,13 +1,30 @@
+ use async_trait::async_trait;
++use thiserror::Error;
+ 
+ use crate::domain::Conversation;
+ 
+-use thiserror::Error;
++type Source = Box<dyn std::error::Error + Send + Sync>;
+ 
+ #[derive(Debug, Error)]
+ pub enum StorageError {
+-    #[error("storage error: {0}")]
+-    Other(String),
++    #[error("cannot open database {path}: {source}")]
++    Open {
++        path: String,
++        #[source]
++        source: Source,
++    },
++
++    #[error("database operation failed: {0}")]
++    Database(#[source] Source),
++
++    #[error("cannot serialize conversation: {0}")]
++    Serialize(#[source] serde_json::Error),
++
++    #[error("stored conversation is corrupt: {0}")]
++    Corrupt(#[source] serde_json::Error),
++
++    #[error("storage internal error: {0}")]
++    Internal(String),
+ }
+ 
+ #[async_trait]
+diff --git a/src/storage/sqlite.rs b/src/storage/sqlite.rs
+index e2cf749..2fdb715 100644
+--- a/src/storage/sqlite.rs
++++ b/src/storage/sqlite.rs
+@@ -1,50 +1,52 @@
+ use std::sync::{Arc, Mutex};
+ 
+ use async_trait::async_trait;
+-use rusqlite::{Connection, params};
++use rusqlite::{Connection, OptionalExtension, params};
+ 
+ use crate::domain::Conversation;
+ 
+ use super::{StorageError, Store};
+ 
++const SCHEMA: &str = "
++    CREATE TABLE IF NOT EXISTS conversations (
++        id INTEGER PRIMARY KEY CHECK (id = 1),
++        data TEXT NOT NULL
++    );
++";
++
+ pub struct SqliteStore {
+     connection: Arc<Mutex<Connection>>,
+ }
+ 
++fn database(error: rusqlite::Error) -> StorageError {
++    StorageError::Database(Box::new(error))
++}
++
+ impl SqliteStore {
+     pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self, StorageError> {
+-        let connection =
+-            Connection::open(path).map_err(|error| StorageError::Other(error.to_string()))?;
+-
+-        connection
+-            .execute_batch(
+-                "
+-                CREATE TABLE IF NOT EXISTS conversations (
+-                    id INTEGER PRIMARY KEY CHECK (id = 1),
+-                    data TEXT NOT NULL
+-                );
+-                ",
+-            )
+-            .map_err(|error| StorageError::Other(error.to_string()))?;
++        let path = path.as_ref();
+ 
+-        Ok(Self { connection: Arc::new(Mutex::new(connection)) })
++        let connection = Connection::open(path).map_err(|error| StorageError::Open {
++            path: path.display().to_string(),
++            source: Box::new(error),
++        })?;
++
++        Self::initialise(connection, |error| StorageError::Open {
++            path: path.display().to_string(),
++            source: Box::new(error),
++        })
+     }
+ 
+     pub fn memory() -> Result<Self, StorageError> {
+-        let connection =
+-            Connection::open_in_memory().map_err(|error| StorageError::Other(error.to_string()))?;
+-
+-        connection
+-            .execute_batch(
+-                "
+-                CREATE TABLE conversations (
+-                    id INTEGER PRIMARY KEY CHECK (id = 1),
+-                    data TEXT NOT NULL
+-                );
+-                ",
+-            )
+-            .map_err(|error| StorageError::Other(error.to_string()))?;
++        let connection = Connection::open_in_memory().map_err(database)?;
++        Self::initialise(connection, database)
++    }
+ 
++    fn initialise(
++        connection: Connection,
++        on_error: impl FnOnce(rusqlite::Error) -> StorageError,
++    ) -> Result<Self, StorageError> {
++        connection.execute_batch(SCHEMA).map_err(on_error)?;
+         Ok(Self { connection: Arc::new(Mutex::new(connection)) })
+     }
+ }
+@@ -52,56 +54,44 @@ impl SqliteStore {
+ #[async_trait]
+ impl Store for SqliteStore {
+     async fn save(&self, conversation: &Conversation) -> Result<(), StorageError> {
+-        let data = serde_json::to_string(conversation)
+-            .map_err(|error| StorageError::Other(error.to_string()))?;
+-
++        let data = serde_json::to_string(conversation).map_err(StorageError::Serialize)?;
+         let connection = Arc::clone(&self.connection);
+ 
+         tokio::task::spawn_blocking(move || {
+-            let connection =
+-                connection.lock().map_err(|error| StorageError::Other(error.to_string()))?;
++            let connection = connection
++                .lock()
++                .map_err(|_| StorageError::Internal("connection lock poisoned".into()))?;
+ 
+             connection
+                 .execute(
+-                    "INSERT OR REPLACE INTO conversations (id, data) VALUES (1, ?1)",
++                    "INSERT INTO conversations (id, data) VALUES (1, ?1)
++                     ON CONFLICT(id) DO UPDATE SET data = excluded.data",
+                     params![data],
+                 )
+-                .map_err(|error| StorageError::Other(error.to_string()))?;
++                .map_err(database)?;
+ 
+             Ok(())
+         })
+         .await
+-        .map_err(|error| StorageError::Other(error.to_string()))?
++        .map_err(|error| StorageError::Internal(error.to_string()))?
+     }
+ 
+     async fn load(&self) -> Result<Option<Conversation>, StorageError> {
+         let connection = Arc::clone(&self.connection);
+ 
+         tokio::task::spawn_blocking(move || {
+-            let connection =
+-                connection.lock().map_err(|error| StorageError::Other(error.to_string()))?;
+-
+-            let mut statement = connection
+-                .prepare("SELECT data FROM conversations WHERE id = 1")
+-                .map_err(|error| StorageError::Other(error.to_string()))?;
+-
+-            let mut rows =
+-                statement.query([]).map_err(|error| StorageError::Other(error.to_string()))?;
+-
+-            match rows.next().map_err(|error| StorageError::Other(error.to_string()))? {
+-                Some(row) => {
+-                    let data: String =
+-                        row.get(0).map_err(|error| StorageError::Other(error.to_string()))?;
++            let connection = connection
++                .lock()
++                .map_err(|_| StorageError::Internal("connection lock poisoned".into()))?;
+ 
+-                    let conversation = serde_json::from_str(&data)
+-                        .map_err(|error| StorageError::Other(error.to_string()))?;
++            let data: Option<String> = connection
++                .query_row("SELECT data FROM conversations WHERE id = 1", [], |row| row.get(0))
++                .optional()
++                .map_err(database)?;
+ 
+-                    Ok(Some(conversation))
+-                }
+-                None => Ok(None),
+-            }
++            data.map(|data| serde_json::from_str(&data).map_err(StorageError::Corrupt)).transpose()
+         })
+         .await
+-        .map_err(|error| StorageError::Other(error.to_string()))?
++        .map_err(|error| StorageError::Internal(error.to_string()))?
+     }
+ }
+diff --git a/src/transport/a2a.rs b/src/transport/a2a.rs
+index 57a6fe3..674f64e 100644
+--- a/src/transport/a2a.rs
++++ b/src/transport/a2a.rs
+@@ -1,10 +1,14 @@
+ use async_trait::async_trait;
+ use reqwest::Client;
+ use serde::{Deserialize, Serialize};
++use serde_json::Value;
+ use url::Url;
+ 
+ use super::{Capabilities, Message, Protocol, Response, Transport, TransportError};
+ 
++const A2A_VERSION: &str = "1.0";
++const SEND_METHOD: &str = "message/send";
++
+ #[derive(Debug, Clone, Deserialize)]
+ pub struct AgentCard {
+     pub name: String,
+@@ -44,7 +48,7 @@ struct SendMessageParams {
+ struct A2aMessage {
+     #[serde(rename = "messageId")]
+     message_id: String,
+-    role: String,
++    role: &'static str,
+     parts: Vec<Part>,
+ }
+ 
+@@ -56,47 +60,10 @@ struct Part {
+ 
+ #[derive(Debug, Deserialize)]
+ struct JsonRpcResponse {
+-    result: Option<SendMessageResult>,
++    result: Option<Value>,
+     error: Option<JsonRpcError>,
+ }
+ 
+-#[derive(Debug, Deserialize)]
+-#[serde(untagged)]
+-enum SendMessageResult {
+-    Message(A2aResponseMessage),
+-    Task(Task),
+-}
+-
+-#[derive(Debug, Deserialize)]
+-struct A2aResponseMessage {
+-    parts: Vec<ResponsePart>,
+-}
+-
+-#[derive(Debug, Deserialize)]
+-struct ResponsePart {
+-    #[allow(dead_code)]
+-    kind: Option<String>,
+-    text: Option<String>,
+-}
+-
+-#[derive(Debug, Deserialize)]
+-struct Task {
+-    #[allow(dead_code)]
+-    id: String,
+-
+-    #[allow(dead_code)]
+-    status: TaskStatus,
+-}
+-
+-#[derive(Debug, Deserialize)]
+-struct TaskStatus {
+-    #[allow(dead_code)]
+-    state: String,
+-
+-    #[allow(dead_code)]
+-    message: Option<A2aResponseMessage>,
+-}
+-
+ #[derive(Debug, Deserialize)]
+ struct JsonRpcError {
+     code: i64,
+@@ -113,45 +80,107 @@ impl Default for A2aTransport {
+     }
+ }
+ 
++fn network(error: reqwest::Error) -> TransportError {
++    TransportError::Network(Box::new(error))
++}
++
++fn check_status(response: reqwest::Response) -> Result<reqwest::Response, TransportError> {
++    let status = response.status();
++
++    if status.is_success() {
++        Ok(response)
++    } else {
++        Err(TransportError::Http { status: status.as_u16() })
++    }
++}
++
+ impl A2aTransport {
+     pub fn new() -> Self {
+         Self::default()
+     }
+ 
++    /// `<target path>/.well-known/agent-card.json`, preserving any path prefix.
+     pub fn agent_card_url(target: &Url) -> Result<Url, TransportError> {
++        if !matches!(target.scheme(), "http" | "https") {
++            return Err(TransportError::UnsupportedProtocol);
++        }
++
+         let mut url = target.clone();
+-        let path = url.path().trim_end_matches('/');
++        url.set_query(None);
++        url.set_fragment(None);
++
++        let path = url.path().trim_end_matches('/').to_owned();
+         url.set_path(&format!("{path}/.well-known/agent-card.json"));
++
+         Ok(url)
+     }
+ 
+     pub async fn agent_card(&self, target: &Url) -> Result<AgentCard, TransportError> {
+         let url = Self::agent_card_url(target)?;
+ 
+-        self.client
++        let response = self
++            .client
+             .get(url)
+-            .header("A2A-Version", "1.0")
++            .header("A2A-Version", A2A_VERSION)
+             .send()
+             .await
+-            .map_err(|error| TransportError::Other(error.to_string()))?
+-            .error_for_status()
+-            .map_err(|error| TransportError::Other(error.to_string()))?
+-            .json::<AgentCard>()
+-            .await
+-            .map_err(|error| TransportError::Other(error.to_string()))
++            .map_err(network)?;
++
++        let body = check_status(response)?.text().await.map_err(network)?;
++
++        serde_json::from_str(&body)
++            .map_err(|error| TransportError::MalformedCard(error.to_string()))
+     }
+ 
+-    fn interface(card: &AgentCard) -> Result<&AgentInterface, TransportError> {
++    pub fn interface(card: &AgentCard) -> Result<&AgentInterface, TransportError> {
+         card.supported_interfaces
+             .iter()
+             .find(|interface| {
+                 interface.protocol_binding.eq_ignore_ascii_case("JSONRPC")
+                     && (interface.protocol_version.is_empty()
+-                        || interface.protocol_version == "1.0")
++                        || interface.protocol_version == A2A_VERSION)
+             })
+             .ok_or(TransportError::UnsupportedProtocol)
+     }
+ 
++    /// Extracts the agent's text from a `message/send` JSON-RPC `result`.
++    ///
++    /// Supported shapes:
++    /// - `result.message`
++    /// - `result.task.status.message`
++    /// - `result` is itself a message (has `parts`)
++    /// - `result` is itself a task (has `status`)
++    pub fn extract_text(result: &Value) -> Result<String, TransportError> {
++        let message = if let Some(message) = result.get("message") {
++            Some(message)
++        } else if let Some(task) = result.get("task") {
++            task.pointer("/status/message")
++        } else if result.get("parts").is_some() {
++            Some(result)
++        } else if result.get("status").is_some() {
++            result.pointer("/status/message")
++        } else {
++            return Err(TransportError::MalformedResponse(
++                "result is neither a message nor a task".into(),
++            ));
++        };
++
++        let message = message
++            .filter(|message| !message.is_null())
++            .ok_or_else(|| TransportError::MalformedResponse("task contains no message".into()))?;
++
++        let parts = message
++            .get("parts")
++            .and_then(Value::as_array)
++            .ok_or_else(|| TransportError::MalformedResponse("message has no parts".into()))?;
++
++        Ok(parts
++            .iter()
++            .filter_map(|part| part.get("text").and_then(Value::as_str))
++            .collect::<Vec<_>>()
++            .join("\n"))
++    }
++
+     async fn send_message(
+         &self,
+         endpoint: &Url,
+@@ -160,11 +189,11 @@ impl A2aTransport {
+         let request = JsonRpcRequest {
+             jsonrpc: "2.0",
+             id: 1,
+-            method: "message/send",
++            method: SEND_METHOD,
+             params: SendMessageParams {
+                 message: A2aMessage {
+-                    message_id: "chatterg-1".to_string(),
+-                    role: "user".to_string(),
++                    message_id: message.id,
++                    role: "user",
+                     parts: vec![Part { kind: "text", text: message.text }],
+                 },
+             },
+@@ -174,55 +203,26 @@ impl A2aTransport {
+             .client
+             .post(endpoint.clone())
+             .header("Content-Type", "application/json")
+-            .header("A2A-Version", "1.0")
++            .header("A2A-Version", A2A_VERSION)
+             .json(&request)
+             .send()
+             .await
+-            .map_err(|error| TransportError::Other(error.to_string()))?
+-            .error_for_status()
+-            .map_err(|error| TransportError::Other(error.to_string()))?
+-            .json::<JsonRpcResponse>()
+-            .await
+-            .map_err(|error| TransportError::Other(error.to_string()))?;
++            .map_err(network)?;
++
++        let body = check_status(response)?.text().await.map_err(network)?;
++
++        let response: JsonRpcResponse = serde_json::from_str(&body)
++            .map_err(|error| TransportError::MalformedResponse(error.to_string()))?;
+ 
+         if let Some(error) = response.error {
+-            return Err(TransportError::Other(format!(
+-                "A2A error {}: {}",
+-                error.code, error.message
+-            )));
++            return Err(TransportError::Protocol { code: error.code, message: error.message });
+         }
+ 
+-        match response.result {
+-            Some(SendMessageResult::Message(message)) => {
+-                let text = message
+-                    .parts
+-                    .into_iter()
+-                    .filter_map(|part| part.text)
+-                    .collect::<Vec<_>>()
+-                    .join("\n");
+-
+-                Ok(Response { text })
+-            }
+-
+-            Some(SendMessageResult::Task(task)) => task
+-                .status
+-                .message
+-                .map(|message| Response {
+-                    text: message
+-                        .parts
+-                        .into_iter()
+-                        .filter_map(|part| part.text)
+-                        .collect::<Vec<_>>()
+-                        .join("\n"),
+-                })
+-                .ok_or_else(|| {
+-                    TransportError::Other("A2A task response did not contain a message".to_string())
+-                }),
+-
+-            None => Err(TransportError::Other(
+-                "A2A response contained neither result nor error".to_string(),
+-            )),
+-        }
++        let result = response.result.ok_or_else(|| {
++            TransportError::MalformedResponse("response contained neither result nor error".into())
++        })?;
++
++        Ok(Response { text: Self::extract_text(&result)? })
+     }
+ }
+ 
+@@ -232,10 +232,11 @@ impl Transport for A2aTransport {
+         let card = self.agent_card(target).await?;
+         let interface = Self::interface(&card)?;
+ 
+-        let endpoint =
+-            Url::parse(&interface.url).map_err(|error| TransportError::Other(error.to_string()))?;
++        let endpoint = Url::parse(&interface.url).map_err(|error| {
++            TransportError::MalformedCard(format!("invalid interface url: {error}"))
++        })?;
+ 
+-        if endpoint.scheme() != "http" && endpoint.scheme() != "https" {
++        if !matches!(endpoint.scheme(), "http" | "https") {
+             return Err(TransportError::UnsupportedProtocol);
+         }
+ 
+@@ -246,3 +247,138 @@ impl Transport for A2aTransport {
+         self.send_message(target, message).await
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use serde_json::json;
++
++    use super::*;
++
++    fn card_url(target: &str) -> String {
++        A2aTransport::agent_card_url(&Url::parse(target).unwrap()).unwrap().to_string()
++    }
++
++    #[test]
++    fn card_url_for_root() {
++        assert_eq!(
++            card_url("https://example.com"),
++            "https://example.com/.well-known/agent-card.json"
++        );
++        assert_eq!(
++            card_url("https://example.com/"),
++            "https://example.com/.well-known/agent-card.json"
++        );
++    }
++
++    #[test]
++    fn card_url_keeps_path_prefix() {
++        assert_eq!(
++            card_url("https://flowmarket.social/nxtbrane"),
++            "https://flowmarket.social/nxtbrane/.well-known/agent-card.json"
++        );
++        assert_eq!(
++            card_url("https://flowmarket.social/nxtbrane/"),
++            "https://flowmarket.social/nxtbrane/.well-known/agent-card.json"
++        );
++    }
++
++    #[test]
++    fn card_url_drops_query_and_fragment() {
++        assert_eq!(
++            card_url("https://example.com/a?x=1#frag"),
++            "https://example.com/a/.well-known/agent-card.json"
++        );
++    }
++
++    #[test]
++    fn card_url_rejects_unsupported_scheme() {
++        let url = Url::parse("ftp://example.com/a").unwrap();
++        assert!(matches!(
++            A2aTransport::agent_card_url(&url),
++            Err(TransportError::UnsupportedProtocol)
++        ));
++    }
++
++    fn interface(binding: &str, version: &str) -> AgentInterface {
++        AgentInterface {
++            url: "https://example.com/rpc".into(),
++            protocol_binding: binding.into(),
++            protocol_version: version.into(),
++        }
++    }
++
++    fn card(interfaces: Vec<AgentInterface>) -> AgentCard {
++        AgentCard { name: "t".into(), description: None, supported_interfaces: interfaces }
++    }
++
++    #[test]
++    fn selects_jsonrpc_interface() {
++        let card = card(vec![interface("GRPC", "1.0"), interface("jsonrpc", "1.0")]);
++        assert_eq!(A2aTransport::interface(&card).unwrap().protocol_binding, "jsonrpc");
++    }
++
++    #[test]
++    fn rejects_card_without_supported_interface() {
++        let card = card(vec![interface("GRPC", "1.0"), interface("JSONRPC", "2.0")]);
++        assert!(matches!(A2aTransport::interface(&card), Err(TransportError::UnsupportedProtocol)));
++    }
++
++    #[test]
++    fn extracts_direct_message() {
++        let result = json!({"message": {"parts": [{"kind": "text", "text": "hi"}]}});
++        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "hi");
++    }
++
++    #[test]
++    fn extracts_flat_message() {
++        let result = json!({"kind": "message", "parts": [{"kind": "text", "text": "hi"}]});
++        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "hi");
++    }
++
++    #[test]
++    fn extracts_wrapped_task() {
++        let result = json!({"task": {"status": {"message": {"parts": [{"text": "done"}]}}}});
++        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "done");
++    }
++
++    #[test]
++    fn extracts_flat_task() {
++        let result = json!({"kind": "task", "status": {"state": "completed",
++            "message": {"parts": [{"kind": "text", "text": "done"}]}}});
++        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "done");
++    }
++
++    #[test]
++    fn joins_multiple_text_parts_and_skips_non_text() {
++        let result = json!({"message": {"parts": [
++            {"kind": "text", "text": "a"},
++            {"kind": "data", "data": {}},
++            {"kind": "text", "text": "b"}
++        ]}});
++        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "a\nb");
++    }
++
++    #[test]
++    fn empty_parts_yield_empty_text() {
++        let result = json!({"message": {"parts": []}});
++        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "");
++    }
++
++    #[test]
++    fn task_without_message_is_malformed() {
++        let result = json!({"kind": "task", "status": {"state": "working"}});
++        assert!(matches!(
++            A2aTransport::extract_text(&result),
++            Err(TransportError::MalformedResponse(_))
++        ));
++    }
++
++    #[test]
++    fn unknown_result_shape_is_malformed() {
++        let result = json!({"something": "else"});
++        assert!(matches!(
++            A2aTransport::extract_text(&result),
++            Err(TransportError::MalformedResponse(_))
++        ));
++    }
++}
+diff --git a/src/transport/mock.rs b/src/transport/mock.rs
+index b307f22..472dc4f 100644
+--- a/src/transport/mock.rs
++++ b/src/transport/mock.rs
+@@ -8,11 +8,20 @@ use super::{Capabilities, Message, Protocol, Response, Transport, TransportError
+ #[derive(Clone)]
+ pub struct MockTransport {
+     responses: Arc<Mutex<Vec<String>>>,
++    sent: Arc<Mutex<Vec<Message>>>,
+ }
+ 
+ impl MockTransport {
+     pub fn new(responses: impl IntoIterator<Item = impl Into<String>>) -> Self {
+-        Self { responses: Arc::new(Mutex::new(responses.into_iter().map(Into::into).collect())) }
++        Self {
++            responses: Arc::new(Mutex::new(responses.into_iter().map(Into::into).collect())),
++            sent: Arc::new(Mutex::new(Vec::new())),
++        }
++    }
++
++    /// Messages that were successfully exchanged, in order.
++    pub fn sent(&self) -> Vec<Message> {
++        self.sent.lock().map(|sent| sent.clone()).unwrap_or_default()
+     }
+ }
+ 
+@@ -22,15 +31,21 @@ impl Transport for MockTransport {
+         Ok(Capabilities { protocols: vec![Protocol::Http], endpoint: target.clone() })
+     }
+ 
+-    async fn send(&self, _target: &Url, _message: Message) -> Result<Response, TransportError> {
++    async fn send(&self, _target: &Url, message: Message) -> Result<Response, TransportError> {
+         let mut responses = self
+             .responses
+             .lock()
+-            .map_err(|_| TransportError::Other("mock state poisoned".into()))?;
++            .map_err(|_| TransportError::Internal("mock state poisoned".into()))?;
+ 
+-        match responses.is_empty() {
+-            false => Ok(Response { text: responses.remove(0) }),
+-            true => Err(TransportError::Other("mock response queue exhausted".into())),
++        if responses.is_empty() {
++            return Err(TransportError::Internal("mock response queue exhausted".into()));
+         }
++
++        self.sent
++            .lock()
++            .map_err(|_| TransportError::Internal("mock state poisoned".into()))?
++            .push(message);
++
++        Ok(Response { text: responses.remove(0) })
+     }
+ }
+diff --git a/src/transport/mod.rs b/src/transport/mod.rs
+index b559cf8..93a78cf 100644
+--- a/src/transport/mod.rs
++++ b/src/transport/mod.rs
+@@ -17,6 +17,8 @@ pub enum Protocol {
+ 
+ #[derive(Debug, Clone)]
+ pub struct Message {
++    /// Unique per message within a conversation.
++    pub id: String,
+     pub text: String,
+ }
+ 
+@@ -30,11 +32,26 @@ pub enum TransportError {
+     #[error("target is unreachable")]
+     Unreachable,
+ 
++    #[error("network failure: {0}")]
++    Network(#[source] Box<dyn std::error::Error + Send + Sync>),
++
++    #[error("HTTP request failed with status {status}")]
++    Http { status: u16 },
++
++    #[error("agent returned a protocol error ({code}): {message}")]
++    Protocol { code: i64, message: String },
++
+     #[error("unsupported protocol")]
+     UnsupportedProtocol,
+ 
+-    #[error("transport error: {0}")]
+-    Other(String),
++    #[error("malformed agent card: {0}")]
++    MalformedCard(String),
++
++    #[error("malformed agent response: {0}")]
++    MalformedResponse(String),
++
++    #[error("transport internal error: {0}")]
++    Internal(String),
+ }
+ 
+ #[async_trait]
+diff --git a/tests/a2a.rs b/tests/a2a.rs
+new file mode 100644
+index 0000000..5848405
+--- /dev/null
++++ b/tests/a2a.rs
+@@ -0,0 +1,315 @@
++use chatterg::transport::{Message, Protocol, Transport, TransportError, a2a::A2aTransport};
++use mockito::{Matcher, Server, ServerGuard};
++use serde_json::json;
++use url::Url;
++
++fn card_body(endpoint: &str, binding: &str, version: &str) -> String {
++    json!({
++        "name": "Test Agent",
++        "supportedInterfaces": [
++            {"url": endpoint, "protocolBinding": binding, "protocolVersion": version}
++        ]
++    })
++    .to_string()
++}
++
++async fn discover_with(
++    server: &mut ServerGuard,
++    path: &str,
++    body: String,
++    target: &str,
++) -> Result<chatterg::transport::Capabilities, TransportError> {
++    let _mock = server
++        .mock("GET", path)
++        .with_status(200)
++        .with_header("content-type", "application/json")
++        .with_body(body)
++        .create_async()
++        .await;
++
++    A2aTransport::new().discover(&Url::parse(target).unwrap()).await
++}
++
++// ---- discovery ---------------------------------------------------------
++
++#[tokio::test]
++async fn discovers_from_root_url() {
++    let mut server = Server::new_async().await;
++    let endpoint = format!("{}/rpc", server.url());
++    let target = server.url();
++
++    let capabilities = discover_with(
++        &mut server,
++        "/.well-known/agent-card.json",
++        card_body(&endpoint, "JSONRPC", "1.0"),
++        &target,
++    )
++    .await
++    .unwrap();
++
++    assert_eq!(capabilities.protocols, vec![Protocol::A2a]);
++    assert_eq!(capabilities.endpoint.as_str(), endpoint);
++}
++
++#[tokio::test]
++async fn discovers_from_path_based_url_without_touching_root() {
++    let mut server = Server::new_async().await;
++    let endpoint = format!("{}/rpc", server.url());
++    let target = format!("{}/nxtbrane", server.url());
++
++    let root = server
++        .mock("GET", "/.well-known/agent-card.json")
++        .with_status(500)
++        .expect(0)
++        .create_async()
++        .await;
++
++    let capabilities = discover_with(
++        &mut server,
++        "/nxtbrane/.well-known/agent-card.json",
++        card_body(&endpoint, "JSONRPC", "1.0"),
++        &target,
++    )
++    .await
++    .unwrap();
++
++    assert_eq!(capabilities.endpoint.as_str(), endpoint);
++    root.assert_async().await;
++}
++
++#[tokio::test]
++async fn discovery_sends_a2a_version_header() {
++    let mut server = Server::new_async().await;
++    let endpoint = format!("{}/rpc", server.url());
++
++    let mock = server
++        .mock("GET", "/.well-known/agent-card.json")
++        .match_header("a2a-version", "1.0")
++        .with_status(200)
++        .with_body(card_body(&endpoint, "JSONRPC", "1.0"))
++        .create_async()
++        .await;
++
++    A2aTransport::new().discover(&Url::parse(&server.url()).unwrap()).await.unwrap();
++    mock.assert_async().await;
++}
++
++#[tokio::test]
++async fn discovery_rejects_malformed_card() {
++    let mut server = Server::new_async().await;
++    let target = server.url();
++
++    let error =
++        discover_with(&mut server, "/.well-known/agent-card.json", "{\"nope\":1}".into(), &target)
++            .await
++            .unwrap_err();
++
++    assert!(matches!(error, TransportError::MalformedCard(_)));
++}
++
++#[tokio::test]
++async fn discovery_rejects_unsupported_binding() {
++    let mut server = Server::new_async().await;
++    let target = server.url();
++    let body = card_body("https://example.com/grpc", "GRPC", "1.0");
++
++    let error = discover_with(&mut server, "/.well-known/agent-card.json", body, &target)
++        .await
++        .unwrap_err();
++
++    assert!(matches!(error, TransportError::UnsupportedProtocol));
++}
++
++#[tokio::test]
++async fn discovery_rejects_malformed_interface_url() {
++    let mut server = Server::new_async().await;
++    let target = server.url();
++    let body = card_body("not a url", "JSONRPC", "1.0");
++
++    let error = discover_with(&mut server, "/.well-known/agent-card.json", body, &target)
++        .await
++        .unwrap_err();
++
++    assert!(matches!(error, TransportError::MalformedCard(_)));
++}
++
++#[tokio::test]
++async fn discovery_rejects_unsupported_scheme() {
++    let mut server = Server::new_async().await;
++    let target = server.url();
++    let body = card_body("ftp://example.com/rpc", "JSONRPC", "1.0");
++
++    let error = discover_with(&mut server, "/.well-known/agent-card.json", body, &target)
++        .await
++        .unwrap_err();
++
++    assert!(matches!(error, TransportError::UnsupportedProtocol));
++}
++
++#[tokio::test]
++async fn discovery_reports_http_failure() {
++    let mut server = Server::new_async().await;
++    let _mock =
++        server.mock("GET", "/.well-known/agent-card.json").with_status(404).create_async().await;
++
++    let error =
++        A2aTransport::new().discover(&Url::parse(&server.url()).unwrap()).await.unwrap_err();
++
++    assert!(matches!(error, TransportError::Http { status: 404 }));
++}
++
++#[tokio::test]
++async fn discovery_rejects_non_http_target() {
++    let error = A2aTransport::new()
++        .discover(&Url::parse("ftp://example.com/agent").unwrap())
++        .await
++        .unwrap_err();
++
++    assert!(matches!(error, TransportError::UnsupportedProtocol));
++}
++
++// ---- message/send ------------------------------------------------------
++
++fn message(id: &str, text: &str) -> Message {
++    Message { id: id.into(), text: text.into() }
++}
++
++async fn send_with(status: usize, body: &str) -> Result<String, TransportError> {
++    let mut server = Server::new_async().await;
++    let _mock = server
++        .mock("POST", "/rpc")
++        .with_status(status)
++        .with_header("content-type", "application/json")
++        .with_body(body)
++        .create_async()
++        .await;
++
++    let endpoint = Url::parse(&format!("{}/rpc", server.url())).unwrap();
++
++    A2aTransport::new().send(&endpoint, message("chatterg-1", "Q")).await.map(|r| r.text)
++}
++
++#[tokio::test]
++async fn send_emits_exact_request() {
++    let mut server = Server::new_async().await;
++
++    let mock = server
++        .mock("POST", "/rpc")
++        .match_header("content-type", "application/json")
++        .match_header("a2a-version", "1.0")
++        .match_body(Matcher::Json(json!({
++            "jsonrpc": "2.0",
++            "id": 1,
++            "method": "message/send",
++            "params": {"message": {
++                "messageId": "chatterg-7",
++                "role": "user",
++                "parts": [{"kind": "text", "text": "What is your name?"}]
++            }}
++        })))
++        .with_status(200)
++        .with_body(
++            json!({"jsonrpc": "2.0", "id": 1,
++            "result": {"message": {"parts": [{"kind": "text", "text": "ok"}]}}})
++            .to_string(),
++        )
++        .create_async()
++        .await;
++
++    let endpoint = Url::parse(&format!("{}/rpc", server.url())).unwrap();
++    let response = A2aTransport::new()
++        .send(&endpoint, message("chatterg-7", "What is your name?"))
++        .await
++        .unwrap();
++
++    assert_eq!(response.text, "ok");
++    mock.assert_async().await;
++}
++
++fn rpc(result: serde_json::Value) -> String {
++    json!({"jsonrpc": "2.0", "id": 1, "result": result}).to_string()
++}
++
++#[tokio::test]
++async fn send_reads_direct_message() {
++    let body = rpc(json!({"kind": "message", "role": "agent", "messageId": "a",
++        "parts": [{"kind": "text", "text": "direct"}]}));
++    assert_eq!(send_with(200, &body).await.unwrap(), "direct");
++}
++
++#[tokio::test]
++async fn send_reads_nxtbrane_style_completed_task() {
++    let body = rpc(json!({"kind": "task", "id": "t", "contextId": "c",
++        "status": {"state": "completed", "message": {"kind": "message", "role": "agent",
++            "parts": [{"kind": "text", "text": "I am Test Agent."}]}}}));
++    assert_eq!(send_with(200, &body).await.unwrap(), "I am Test Agent.");
++}
++
++#[tokio::test]
++async fn send_reads_wrapped_task() {
++    let body = rpc(json!({"task": {"id": "t", "status": {"state": "completed",
++        "message": {"parts": [{"kind": "text", "text": "wrapped"}]}}}}));
++    assert_eq!(send_with(200, &body).await.unwrap(), "wrapped");
++}
++
++#[tokio::test]
++async fn send_joins_multiple_text_parts() {
++    let body = rpc(json!({"message": {"parts": [
++        {"kind": "text", "text": "one"}, {"kind": "text", "text": "two"}]}}));
++    assert_eq!(send_with(200, &body).await.unwrap(), "one\ntwo");
++}
++
++#[tokio::test]
++async fn send_with_empty_parts_returns_empty_text() {
++    let body = rpc(json!({"message": {"parts": []}}));
++    assert_eq!(send_with(200, &body).await.unwrap(), "");
++}
++
++#[tokio::test]
++async fn send_task_without_message_is_malformed() {
++    let body = rpc(json!({"kind": "task", "id": "t", "status": {"state": "working"}}));
++    assert!(matches!(send_with(200, &body).await, Err(TransportError::MalformedResponse(_))));
++}
++
++#[tokio::test]
++async fn send_reports_json_rpc_error() {
++    let body = json!({"jsonrpc": "2.0", "id": 1,
++        "error": {"code": -32601, "message": "Method not found"}})
++    .to_string();
++
++    match send_with(200, &body).await {
++        Err(TransportError::Protocol { code, message }) => {
++            assert_eq!(code, -32601);
++            assert_eq!(message, "Method not found");
++        }
++        other => panic!("expected protocol error, got {other:?}"),
++    }
++}
++
++#[tokio::test]
++async fn send_reports_malformed_json() {
++    assert!(matches!(send_with(200, "not json").await, Err(TransportError::MalformedResponse(_))));
++}
++
++#[tokio::test]
++async fn send_reports_response_with_neither_result_nor_error() {
++    let body = json!({"jsonrpc": "2.0", "id": 1}).to_string();
++    assert!(matches!(send_with(200, &body).await, Err(TransportError::MalformedResponse(_))));
++}
++
++#[tokio::test]
++async fn send_reports_http_4xx() {
++    assert!(matches!(send_with(400, "{}").await, Err(TransportError::Http { status: 400 })));
++}
++
++#[tokio::test]
++async fn send_reports_http_5xx() {
++    assert!(matches!(send_with(503, "{}").await, Err(TransportError::Http { status: 503 })));
++}
++
++#[tokio::test]
++async fn send_reports_network_failure() {
++    let endpoint = Url::parse("http://127.0.0.1:1/rpc").unwrap();
++    let result = A2aTransport::new().send(&endpoint, message("chatterg-1", "Q")).await;
++    assert!(matches!(result, Err(TransportError::Network(_))));
++}
+diff --git a/tests/application.rs b/tests/application.rs
+index f392f3b..88c9d1e 100644
+--- a/tests/application.rs
++++ b/tests/application.rs
+@@ -1,139 +1,167 @@
+ use std::sync::Arc;
+ 
+ use chatterg::{
+-    application::run,
+-    domain::{Engine, Questionnaire},
++    application::{ApplicationError, run},
++    domain::{EngineState, Questionnaire, State},
+     storage::{Store, sqlite::SqliteStore},
+-    transport::mock::MockTransport,
++    transport::{TransportError, mock::MockTransport},
+ };
+ 
+-#[tokio::test]
+-async fn mock_bot_completes_questionnaire() {
+-    let questionnaire: Questionnaire =
+-        serde_yaml::from_str(include_str!("../questions.yaml")).unwrap();
+-
+-    let engine = Engine::new(questionnaire);
++const ANSWERS: [&str; 5] = ["Acme", "Mumbai", "Software", "India, Singapore", "commercial"];
+ 
+-    let transport =
+-        MockTransport::new(["Acme", "Mumbai", "Software", "India, Singapore", "commercial"]);
++fn questionnaire() -> Questionnaire {
++    serde_yaml::from_str(include_str!("../questions.yaml")).unwrap()
++}
+ 
++#[tokio::test]
++async fn mock_bot_completes_questionnaire() {
++    let transport = MockTransport::new(ANSWERS);
+     let store = Arc::new(SqliteStore::memory().unwrap());
+ 
+-    let engine = run(engine, "http://mock.local", &transport, Arc::clone(&store)).await.unwrap();
++    let engine =
++        run(questionnaire(), "http://mock.local", &transport, Arc::clone(&store)).await.unwrap();
+ 
+     assert_eq!(engine.conversation().answers.len(), 5);
++    assert_eq!(engine.conversation().position, 5);
++    assert_eq!(engine.conversation().state, State::Complete);
+ 
+     let stored = store.load().await.unwrap().unwrap();
+-
+     assert_eq!(stored, *engine.conversation());
+ }
+ 
+ #[tokio::test]
+-async fn a2a_send_receives_message_response() {
+-    use chatterg::transport::{Message, Transport, a2a::A2aTransport};
+-    use url::Url;
+-
+-    let mut server = mockito::Server::new_async().await;
+-
+-    let _mock = server
+-        .mock("POST", "/a2a")
+-        .match_header("content-type", "application/json")
+-        .match_header("a2a-version", "1.0")
+-        .match_body(mockito::Matcher::Json(serde_json::json!({
+-            "jsonrpc": "2.0",
+-            "id": 1,
+-            "method": "message/send",
+-            "params": {
+-                "message": {
+-                    "messageId": "chatterg-1",
+-                    "role": "user",
+-                    "parts": [
+-                        {
+-                            "kind": "text",
+-                            "text": "What is your name?"
+-                        }
+-                    ]
+-                }
+-            }
+-        })))
+-        .with_status(200)
+-        .with_header("content-type", "application/json")
+-        .with_body(
+-            r#"{
+-                "jsonrpc": "2.0",
+-                "id": 1,
+-                "result": {
+-                    "kind": "task",
+-                    "id": "task-1",
+-                    "contextId": "context-1",
+-                    "status": {
+-                        "state": "completed",
+-                        "message": {
+-                            "kind": "message",
+-                            "role": "agent",
+-                            "messageId": "agent-1",
+-                            "taskId": "task-1",
+-                            "contextId": "context-1",
+-                            "parts": [
+-                                {
+-                                    "kind": "text",
+-                                    "text": "I am Test Agent."
+-                                }
+-                            ]
+-                        }
+-                    }
+-                }
+-            }"#,
+-        )
+-        .create_async()
+-        .await;
+-
+-    let transport = A2aTransport::new();
+-    let endpoint = Url::parse(&format!("{}/a2a", server.url())).unwrap();
+-
+-    let response = transport
+-        .send(&endpoint, Message { text: "What is your name?".to_string() })
++async fn message_ids_are_sequential_and_unique() {
++    let transport = MockTransport::new(ANSWERS);
++    let store = Arc::new(SqliteStore::memory().unwrap());
++
++    run(questionnaire(), "http://mock.local", &transport, store).await.unwrap();
++
++    let ids: Vec<_> = transport.sent().into_iter().map(|message| message.id).collect();
++    assert_eq!(ids, ["chatterg-1", "chatterg-2", "chatterg-3", "chatterg-4", "chatterg-5"]);
++}
++
++#[tokio::test]
++async fn interrupted_run_resumes_and_matches_uninterrupted_run() {
++    // Uninterrupted reference run.
++    let reference_store = Arc::new(SqliteStore::memory().unwrap());
++    let reference = run(
++        questionnaire(),
++        "http://mock.local",
++        &MockTransport::new(ANSWERS),
++        Arc::clone(&reference_store),
++    )
++    .await
++    .unwrap();
++
++    // Interrupted run: a fresh process (new transport, reopened store) per answer.
++    let dir = tempfile::tempdir().unwrap();
++    let path = dir.path().join("chatterg.db");
++    let mut ids = Vec::new();
++    let mut asked = Vec::new();
++    let mut last = None;
++
++    for (index, answer) in ANSWERS.iter().enumerate() {
++        let transport = MockTransport::new([*answer]);
++        let store = Arc::new(SqliteStore::open(&path).unwrap());
++
++        let result = run(questionnaire(), "http://mock.local", &transport, store).await;
++
++        for message in transport.sent() {
++            ids.push(message.id);
++            asked.push(message.text);
++        }
++
++        if index + 1 < ANSWERS.len() {
++            // The next question is attempted but the "process" dies (queue exhausted).
++            assert!(matches!(
++                result,
++                Err(ApplicationError::Transport(TransportError::Internal(_)))
++            ));
++
++            let stored = SqliteStore::open(&path).unwrap().load().await.unwrap().unwrap();
++            assert_eq!(stored.position, index + 1);
++        } else {
++            last = Some(result.unwrap());
++        }
++    }
++
++    let resumed = last.unwrap();
++
++    assert_eq!(resumed.conversation(), reference.conversation());
++    assert_eq!(ids, ["chatterg-1", "chatterg-2", "chatterg-3", "chatterg-4", "chatterg-5"]);
++
++    // No question repeated.
++    let mut unique = asked.clone();
++    unique.dedup();
++    assert_eq!(unique, asked);
++
++    let stored = SqliteStore::open(&path).unwrap().load().await.unwrap().unwrap();
++    assert_eq!(stored, *reference.conversation());
++}
++
++#[tokio::test]
++async fn completed_conversation_is_not_asked_again() {
++    let store = Arc::new(SqliteStore::memory().unwrap());
++
++    run(questionnaire(), "http://mock.local", &MockTransport::new(ANSWERS), Arc::clone(&store))
+         .await
+         .unwrap();
+ 
+-    assert_eq!(response.text, "I am Test Agent.");
++    let second = MockTransport::new(Vec::<String>::new());
++    let engine = run(questionnaire(), "http://mock.local", &second, store).await.unwrap();
++
++    assert_eq!(engine.start(), EngineState::Complete);
++    assert!(second.sent().is_empty());
+ }
+ 
+ #[tokio::test]
+-async fn a2a_discovery_reads_agent_card() {
+-    use chatterg::transport::{Protocol, Transport, a2a::A2aTransport};
+-    use url::Url;
+-
+-    let mut server = mockito::Server::new_async().await;
+-
+-    let endpoint = format!("{}/a2a", server.url());
+-
+-    let _mock = server
+-        .mock("GET", "/.well-known/agent-card.json")
+-        .with_status(200)
+-        .with_header("content-type", "application/json")
+-        .with_body(format!(
+-            r#"{{
+-                "name": "Test Agent",
+-                "description": "Test",
+-                "supportedInterfaces": [
+-                    {{
+-                        "url": "{}",
+-                        "protocolBinding": "JSONRPC",
+-                        "protocolVersion": "1.0"
+-                    }}
+-                ]
+-            }}"#,
+-            endpoint
+-        ))
+-        .create_async()
+-        .await;
+-
+-    let transport = A2aTransport::new();
+-    let target = Url::parse(&server.url()).unwrap();
+-
+-    let capabilities = transport.discover(&target).await.unwrap();
+-
+-    assert_eq!(capabilities.protocols, vec![Protocol::A2a]);
+-    assert_eq!(capabilities.endpoint.as_str(), endpoint);
++async fn aborted_conversation_is_not_resumed() {
++    let store = Arc::new(SqliteStore::memory().unwrap());
++
++    // Required integer-like enum answer is invalid and default policy is abort.
++    let questionnaire: Questionnaire = serde_yaml::from_str(
++        "questions:\n  - {id: a, question: Q, required: true, type: enum, values: [x]}\n",
++    )
++    .unwrap();
++
++    let first = run(
++        questionnaire.clone(),
++        "http://mock.local",
++        &MockTransport::new(["nope"]),
++        Arc::clone(&store),
++    )
++    .await
++    .unwrap();
++    assert_eq!(first.start(), EngineState::Aborted);
++
++    let second = MockTransport::new(["x"]);
++    let engine = run(questionnaire, "http://mock.local", &second, store).await.unwrap();
++
++    assert_eq!(engine.start(), EngineState::Aborted);
++    assert!(second.sent().is_empty());
++}
++
++#[tokio::test]
++async fn invalid_target_is_reported() {
++    let store = Arc::new(SqliteStore::memory().unwrap());
++    let result = run(questionnaire(), "not a url", &MockTransport::new(ANSWERS), store).await;
++
++    assert!(matches!(result, Err(ApplicationError::InvalidTarget(_))));
++}
++
++#[tokio::test]
++async fn resuming_with_a_different_questionnaire_is_rejected() {
++    let store = Arc::new(SqliteStore::memory().unwrap());
++
++    run(questionnaire(), "http://mock.local", &MockTransport::new(["Acme"]), Arc::clone(&store))
++        .await
++        .unwrap_err();
++
++    let other: Questionnaire = serde_yaml::from_str(
++        "questions:\n  - {id: other, question: Q, required: true, type: string}\n",
++    )
++    .unwrap();
++
++    let result = run(other, "http://mock.local", &MockTransport::new(["x"]), store).await;
++    assert!(matches!(result, Err(ApplicationError::Domain(_))));
+ }
+diff --git a/tests/cli.rs b/tests/cli.rs
+new file mode 100644
+index 0000000..fdda32b
+--- /dev/null
++++ b/tests/cli.rs
+@@ -0,0 +1,117 @@
++use assert_cmd::Command;
++use mockito::Server;
++use predicates::prelude::*;
++use serde_json::json;
++
++fn chatterg() -> Command {
++    Command::cargo_bin("chatterg").unwrap()
++}
++
++#[test]
++fn help_documents_all_arguments() {
++    chatterg()
++        .arg("--help")
++        .assert()
++        .success()
++        .stdout(predicate::str::contains("AGENT_URL"))
++        .stdout(predicate::str::contains("QUESTIONS_YAML"))
++        .stdout(predicate::str::contains("--store <SQLITE_PATH>"))
++        .stdout(predicate::str::contains("agent card"));
++}
++
++#[test]
++fn missing_arguments_fail() {
++    chatterg().assert().failure().stderr(predicate::str::contains("Usage"));
++    chatterg().arg("http://localhost").assert().failure();
++}
++
++#[test]
++fn invalid_questionnaire_path_fails_cleanly() {
++    chatterg()
++        .args(["http://localhost:1", "/no/such/questions.yaml"])
++        .assert()
++        .failure()
++        .stderr(predicate::str::contains("cannot read questionnaire"))
++        .stderr(predicate::str::contains("/no/such/questions.yaml"));
++}
++
++#[test]
++fn invalid_store_path_fails_cleanly() {
++    chatterg()
++        .args(["http://localhost:1", "questions.yaml", "--store", "/no/such/dir/x.db"])
++        .assert()
++        .failure()
++        .stderr(predicate::str::contains("cannot open database"));
++}
++
++#[test]
++fn empty_questionnaire_fails_cleanly() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = dir.path().join("empty.yaml");
++    std::fs::write(&path, "questions: []\n").unwrap();
++
++    chatterg()
++        .args(["http://localhost:1"])
++        .arg(&path)
++        .arg("--store")
++        .arg(dir.path().join("x.db"))
++        .assert()
++        .failure()
++        .stderr(predicate::str::contains("no questions"));
++}
++
++#[tokio::test]
++async fn end_to_end_against_mock_agent_then_resume_is_a_noop() {
++    let mut server = Server::new_async().await;
++    let rpc_url = format!("{}/rpc", server.url());
++
++    let _card = server
++        .mock("GET", "/agent/.well-known/agent-card.json")
++        .with_status(200)
++        .with_body(
++            json!({"name": "Mock", "supportedInterfaces": [
++                {"url": rpc_url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
++            ]})
++            .to_string(),
++        )
++        .create_async()
++        .await;
++
++    let rpc = server
++        .mock("POST", "/rpc")
++        .with_status(200)
++        .with_body(
++            json!({"jsonrpc": "2.0", "id": 1, "result": {"kind": "task", "id": "t",
++                "status": {"state": "completed", "message": {"parts": [
++                    {"kind": "text", "text": "Acme"}]}}}})
++            .to_string(),
++        )
++        .expect(1)
++        .create_async()
++        .await;
++
++    let dir = tempfile::tempdir().unwrap();
++    let questions = dir.path().join("q.yaml");
++    std::fs::write(
++        &questions,
++        "questions:\n  - {id: company, question: Name?, required: true, type: string}\n",
++    )
++    .unwrap();
++    let store = dir.path().join("c.db");
++    let target = format!("{}/agent", server.url());
++
++    for _ in 0..2 {
++        chatterg()
++            .arg(&target)
++            .arg(&questions)
++            .arg("--store")
++            .arg(&store)
++            .assert()
++            .success()
++            .stdout(predicate::str::contains("company"))
++            .stdout(predicate::str::contains("Acme"));
++    }
++
++    // Second invocation resumed a completed conversation: the agent was asked once only.
++    rpc.assert_async().await;
++}
+diff --git a/tests/engine.rs b/tests/engine.rs
+index 803a767..99a6612 100644
+--- a/tests/engine.rs
++++ b/tests/engine.rs
+@@ -148,3 +148,113 @@ questions:
+ 
+     assert_eq!(questionnaire.questions[0].on_failure, FailurePolicy::Abort);
+ }
++
++// ---- position / resume -------------------------------------------------
++
++use chatterg::domain::{Conversation, DomainError, State};
++
++#[test]
++fn fresh_conversation_starts_at_position_zero() {
++    let engine = Engine::new(questionnaire());
++    assert_eq!(engine.position(), 0);
++    assert_eq!(engine.conversation().position, 0);
++    assert_eq!(engine.conversation().messages_sent, 0);
++}
++
++#[test]
++fn answering_advances_position_and_message_count() {
++    let engine = Engine::new(questionnaire());
++
++    let Submission::Next(engine, _) = engine.submit("Sn".into()) else {
++        panic!("expected next question");
++    };
++
++    assert_eq!(engine.position(), 1);
++    assert_eq!(engine.conversation().messages_sent, 1);
++}
++
++#[test]
++fn retry_keeps_position_but_counts_message() {
++    let Submission::Retry(engine, _) = Engine::new(questionnaire()).submit("".into()) else {
++        panic!("expected retry");
++    };
++
++    assert_eq!(engine.position(), 0);
++    assert_eq!(engine.conversation().messages_sent, 1);
++}
++
++#[test]
++fn position_is_not_answer_count_when_question_is_retried() {
++    let Submission::Retry(engine, _) = Engine::new(questionnaire()).submit("".into()) else {
++        panic!("expected retry");
++    };
++    let Submission::Retry(engine, _) = engine.submit("".into()) else {
++        panic!("expected retry");
++    };
++
++    // two attempts recorded for one answer record, still on question 0
++    assert_eq!(engine.position(), 0);
++    assert_eq!(engine.conversation().answers.len(), 1);
++}
++
++#[test]
++fn resume_continues_at_persisted_position() {
++    let Submission::Next(engine, _) = Engine::new(questionnaire()).submit("Sn".into()) else {
++        panic!("expected next question");
++    };
++
++    let json = serde_json::to_string(engine.conversation()).unwrap();
++    let stored: Conversation = serde_json::from_str(&json).unwrap();
++    assert_eq!(stored.position, 1);
++
++    let resumed = Engine::resume(questionnaire(), stored).unwrap();
++
++    match resumed.start() {
++        EngineState::Asking(question) => assert_eq!(question.id.as_str(), "age"),
++        other => panic!("expected age question, got {other:?}"),
++    }
++}
++
++#[test]
++fn completed_conversation_stays_completed_after_reload() {
++    let Submission::Next(engine, _) = Engine::new(questionnaire()).submit("Sn".into()) else {
++        panic!("expected next");
++    };
++    let Submission::Complete(engine) = engine.submit("42".into()) else {
++        panic!("expected completion");
++    };
++
++    assert_eq!(engine.conversation().state, State::Complete);
++
++    let json = serde_json::to_string(engine.conversation()).unwrap();
++    let resumed = Engine::resume(questionnaire(), serde_json::from_str(&json).unwrap()).unwrap();
++
++    assert_eq!(resumed.start(), EngineState::Complete);
++    assert_eq!(resumed.position(), 2);
++}
++
++#[test]
++fn aborted_conversation_stays_aborted_after_reload() {
++    let Submission::Aborted(engine) = Engine::new(policy_questionnaire("abort")).submit("".into())
++    else {
++        panic!("expected abort");
++    };
++
++    let json = serde_json::to_string(engine.conversation()).unwrap();
++    let resumed =
++        Engine::resume(policy_questionnaire("abort"), serde_json::from_str(&json).unwrap())
++            .unwrap();
++
++    assert_eq!(resumed.start(), EngineState::Aborted);
++}
++
++#[test]
++fn resume_rejects_position_past_end() {
++    let mut conversation = Conversation::new();
++    conversation.position = 99;
++
++    assert!(matches!(
++        Engine::resume(questionnaire(), conversation),
++        Err(DomainError::InvalidPosition { position: 99, len: 2 })
++    ));
++}
+diff --git a/tests/loader.rs b/tests/loader.rs
+new file mode 100644
+index 0000000..71db8bf
+--- /dev/null
++++ b/tests/loader.rs
+@@ -0,0 +1,59 @@
++use chatterg::domain::{DomainError, Questionnaire};
++
++fn write(dir: &tempfile::TempDir, name: &str, body: &str) -> std::path::PathBuf {
++    let path = dir.path().join(name);
++    std::fs::write(&path, body).unwrap();
++    path
++}
++
++#[test]
++fn missing_file_is_a_useful_error() {
++    let error = Questionnaire::from_path("/definitely/not/here.yaml").unwrap_err();
++
++    assert!(matches!(error, DomainError::QuestionnaireRead { .. }));
++    assert!(error.to_string().contains("/definitely/not/here.yaml"));
++}
++
++#[test]
++fn invalid_yaml_is_a_useful_error() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(&dir, "bad.yaml", "questions: [ this is : not valid");
++
++    let error = Questionnaire::from_path(&path).unwrap_err();
++
++    assert!(matches!(error, DomainError::QuestionnaireParse { .. }));
++    assert!(error.to_string().contains("bad.yaml"));
++}
++
++#[test]
++fn empty_questionnaire_is_rejected() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(&dir, "empty.yaml", "questions: []\n");
++
++    assert!(matches!(Questionnaire::from_path(&path), Err(DomainError::EmptyQuestionnaire)));
++}
++
++#[test]
++fn duplicate_ids_are_rejected() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = write(
++        &dir,
++        "dup.yaml",
++        "questions:\n  - {id: a, question: Q1, required: true, type: string}\n  - {id: a, question: Q2, required: true, type: string}\n",
++    );
++
++    assert!(matches!(
++        Questionnaire::from_path(&path),
++        Err(DomainError::DuplicateQuestionId(id)) if id == "a"
++    ));
++}
++
++#[test]
++fn valid_questionnaire_loads_deterministically() {
++    let first = Questionnaire::from_path("questions.yaml").unwrap();
++    let second = Questionnaire::from_path("questions.yaml").unwrap();
++
++    assert_eq!(first, second);
++    assert_eq!(first.questions.len(), 5);
++    assert_eq!(first.questions[0].id.as_str(), "company_name");
++}
+diff --git a/tests/storage.rs b/tests/storage.rs
+new file mode 100644
+index 0000000..6459b14
+--- /dev/null
++++ b/tests/storage.rs
+@@ -0,0 +1,103 @@
++use chatterg::{
++    domain::{Conversation, Engine, Questionnaire, Submission},
++    storage::{StorageError, Store, sqlite::SqliteStore},
++};
++
++fn conversation_at(position: usize) -> Conversation {
++    Conversation { position, messages_sent: position as u64, ..Conversation::new() }
++}
++
++#[tokio::test]
++async fn empty_database_loads_none() {
++    let store = SqliteStore::memory().unwrap();
++    assert!(store.load().await.unwrap().is_none());
++}
++
++#[tokio::test]
++async fn first_save_then_load_round_trips() {
++    let store = SqliteStore::memory().unwrap();
++    let conversation = conversation_at(3);
++
++    store.save(&conversation).await.unwrap();
++
++    assert_eq!(store.load().await.unwrap().unwrap(), conversation);
++}
++
++#[tokio::test]
++async fn repeated_save_keeps_one_logical_conversation() {
++    let store = SqliteStore::memory().unwrap();
++
++    store.save(&conversation_at(1)).await.unwrap();
++    store.save(&conversation_at(2)).await.unwrap();
++
++    assert_eq!(store.load().await.unwrap().unwrap().position, 2);
++}
++
++#[tokio::test]
++async fn state_survives_process_restart() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = dir.path().join("chatterg.db");
++
++    {
++        let store = SqliteStore::open(&path).unwrap();
++        store.save(&conversation_at(4)).await.unwrap();
++    }
++
++    let reopened = SqliteStore::open(&path).unwrap();
++    assert_eq!(reopened.load().await.unwrap().unwrap().position, 4);
++}
++
++#[tokio::test]
++async fn malformed_persisted_data_is_an_error() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = dir.path().join("chatterg.db");
++
++    drop(SqliteStore::open(&path).unwrap());
++
++    let connection = rusqlite::Connection::open(&path).unwrap();
++    connection.execute("INSERT INTO conversations (id, data) VALUES (1, 'not json')", []).unwrap();
++    drop(connection);
++
++    let store = SqliteStore::open(&path).unwrap();
++    assert!(matches!(store.load().await, Err(StorageError::Corrupt(_))));
++}
++
++#[tokio::test]
++async fn old_format_without_position_is_rejected_not_guessed() {
++    let dir = tempfile::tempdir().unwrap();
++    let path = dir.path().join("chatterg.db");
++
++    drop(SqliteStore::open(&path).unwrap());
++
++    let connection = rusqlite::Connection::open(&path).unwrap();
++    connection
++        .execute(
++            "INSERT INTO conversations (id, data) VALUES (1, '{\"state\":\"Ready\",\"answers\":[]}')",
++            [],
++        )
++        .unwrap();
++    drop(connection);
++
++    let store = SqliteStore::open(&path).unwrap();
++    assert!(matches!(store.load().await, Err(StorageError::Corrupt(_))));
++}
++
++#[test]
++fn unavailable_database_is_an_error() {
++    let result = SqliteStore::open("/definitely/not/a/dir/chatterg.db");
++    assert!(matches!(result, Err(StorageError::Open { .. })));
++}
++
++#[tokio::test]
++async fn engine_state_round_trips_through_store() {
++    let questionnaire: Questionnaire =
++        serde_yaml::from_str(include_str!("../questions.yaml")).unwrap();
++    let Submission::Next(engine, _) = Engine::new(questionnaire).submit("Acme".into()) else {
++        panic!("expected next");
++    };
++
++    let store = SqliteStore::memory().unwrap();
++    store.save(engine.conversation()).await.unwrap();
++
++    assert_eq!(&store.load().await.unwrap().unwrap(), engine.conversation());
++}

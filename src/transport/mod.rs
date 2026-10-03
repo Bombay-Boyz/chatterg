@@ -17,6 +17,8 @@ pub enum Protocol {
 
 #[derive(Debug, Clone)]
 pub struct Message {
+    /// Unique per message within a conversation.
+    pub id: String,
     pub text: String,
 }
 
@@ -30,11 +32,26 @@ pub enum TransportError {
     #[error("target is unreachable")]
     Unreachable,
 
+    #[error("network failure: {0}")]
+    Network(#[source] Box<dyn std::error::Error + Send + Sync>),
+
+    #[error("HTTP request failed with status {status}")]
+    Http { status: u16 },
+
+    #[error("agent returned a protocol error ({code}): {message}")]
+    Protocol { code: i64, message: String },
+
     #[error("unsupported protocol")]
     UnsupportedProtocol,
 
-    #[error("transport error: {0}")]
-    Other(String),
+    #[error("malformed agent card: {0}")]
+    MalformedCard(String),
+
+    #[error("malformed agent response: {0}")]
+    MalformedResponse(String),
+
+    #[error("transport internal error: {0}")]
+    Internal(String),
 }
 
 #[async_trait]

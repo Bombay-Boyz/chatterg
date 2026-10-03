@@ -1,139 +1,167 @@
 use std::sync::Arc;
 
 use chatterg::{
-    application::run,
-    domain::{Engine, Questionnaire},
+    application::{ApplicationError, run},
+    domain::{EngineState, Questionnaire, State},
     storage::{Store, sqlite::SqliteStore},
-    transport::mock::MockTransport,
+    transport::{TransportError, mock::MockTransport},
 };
+
+const ANSWERS: [&str; 5] = ["Acme", "Mumbai", "Software", "India, Singapore", "commercial"];
+
+fn questionnaire() -> Questionnaire {
+    serde_yaml::from_str(include_str!("../questions.yaml")).unwrap()
+}
 
 #[tokio::test]
 async fn mock_bot_completes_questionnaire() {
-    let questionnaire: Questionnaire =
-        serde_yaml::from_str(include_str!("../questions.yaml")).unwrap();
-
-    let engine = Engine::new(questionnaire);
-
-    let transport =
-        MockTransport::new(["Acme", "Mumbai", "Software", "India, Singapore", "commercial"]);
-
+    let transport = MockTransport::new(ANSWERS);
     let store = Arc::new(SqliteStore::memory().unwrap());
 
-    let engine = run(engine, "http://mock.local", &transport, Arc::clone(&store)).await.unwrap();
+    let engine =
+        run(questionnaire(), "http://mock.local", &transport, Arc::clone(&store)).await.unwrap();
 
     assert_eq!(engine.conversation().answers.len(), 5);
+    assert_eq!(engine.conversation().position, 5);
+    assert_eq!(engine.conversation().state, State::Complete);
 
     let stored = store.load().await.unwrap().unwrap();
-
     assert_eq!(stored, *engine.conversation());
 }
 
 #[tokio::test]
-async fn a2a_send_receives_message_response() {
-    use chatterg::transport::{Message, Transport, a2a::A2aTransport};
-    use url::Url;
+async fn message_ids_are_sequential_and_unique() {
+    let transport = MockTransport::new(ANSWERS);
+    let store = Arc::new(SqliteStore::memory().unwrap());
 
-    let mut server = mockito::Server::new_async().await;
+    run(questionnaire(), "http://mock.local", &transport, store).await.unwrap();
 
-    let _mock = server
-        .mock("POST", "/a2a")
-        .match_header("content-type", "application/json")
-        .match_header("a2a-version", "1.0")
-        .match_body(mockito::Matcher::Json(serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "message/send",
-            "params": {
-                "message": {
-                    "messageId": "chatterg-1",
-                    "role": "user",
-                    "parts": [
-                        {
-                            "kind": "text",
-                            "text": "What is your name?"
-                        }
-                    ]
-                }
-            }
-        })))
-        .with_status(200)
-        .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-                "jsonrpc": "2.0",
-                "id": 1,
-                "result": {
-                    "kind": "task",
-                    "id": "task-1",
-                    "contextId": "context-1",
-                    "status": {
-                        "state": "completed",
-                        "message": {
-                            "kind": "message",
-                            "role": "agent",
-                            "messageId": "agent-1",
-                            "taskId": "task-1",
-                            "contextId": "context-1",
-                            "parts": [
-                                {
-                                    "kind": "text",
-                                    "text": "I am Test Agent."
-                                }
-                            ]
-                        }
-                    }
-                }
-            }"#,
-        )
-        .create_async()
-        .await;
-
-    let transport = A2aTransport::new();
-    let endpoint = Url::parse(&format!("{}/a2a", server.url())).unwrap();
-
-    let response = transport
-        .send(&endpoint, Message { text: "What is your name?".to_string() })
-        .await
-        .unwrap();
-
-    assert_eq!(response.text, "I am Test Agent.");
+    let ids: Vec<_> = transport.sent().into_iter().map(|message| message.id).collect();
+    assert_eq!(ids, ["chatterg-1", "chatterg-2", "chatterg-3", "chatterg-4", "chatterg-5"]);
 }
 
 #[tokio::test]
-async fn a2a_discovery_reads_agent_card() {
-    use chatterg::transport::{Protocol, Transport, a2a::A2aTransport};
-    use url::Url;
+async fn interrupted_run_resumes_and_matches_uninterrupted_run() {
+    // Uninterrupted reference run.
+    let reference_store = Arc::new(SqliteStore::memory().unwrap());
+    let reference = run(
+        questionnaire(),
+        "http://mock.local",
+        &MockTransport::new(ANSWERS),
+        Arc::clone(&reference_store),
+    )
+    .await
+    .unwrap();
 
-    let mut server = mockito::Server::new_async().await;
+    // Interrupted run: a fresh process (new transport, reopened store) per answer.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("chatterg.db");
+    let mut ids = Vec::new();
+    let mut asked = Vec::new();
+    let mut last = None;
 
-    let endpoint = format!("{}/a2a", server.url());
+    for (index, answer) in ANSWERS.iter().enumerate() {
+        let transport = MockTransport::new([*answer]);
+        let store = Arc::new(SqliteStore::open(&path).unwrap());
 
-    let _mock = server
-        .mock("GET", "/.well-known/agent-card.json")
-        .with_status(200)
-        .with_header("content-type", "application/json")
-        .with_body(format!(
-            r#"{{
-                "name": "Test Agent",
-                "description": "Test",
-                "supportedInterfaces": [
-                    {{
-                        "url": "{}",
-                        "protocolBinding": "JSONRPC",
-                        "protocolVersion": "1.0"
-                    }}
-                ]
-            }}"#,
-            endpoint
-        ))
-        .create_async()
-        .await;
+        let result = run(questionnaire(), "http://mock.local", &transport, store).await;
 
-    let transport = A2aTransport::new();
-    let target = Url::parse(&server.url()).unwrap();
+        for message in transport.sent() {
+            ids.push(message.id);
+            asked.push(message.text);
+        }
 
-    let capabilities = transport.discover(&target).await.unwrap();
+        if index + 1 < ANSWERS.len() {
+            // The next question is attempted but the "process" dies (queue exhausted).
+            assert!(matches!(
+                result,
+                Err(ApplicationError::Transport(TransportError::Internal(_)))
+            ));
 
-    assert_eq!(capabilities.protocols, vec![Protocol::A2a]);
-    assert_eq!(capabilities.endpoint.as_str(), endpoint);
+            let stored = SqliteStore::open(&path).unwrap().load().await.unwrap().unwrap();
+            assert_eq!(stored.position, index + 1);
+        } else {
+            last = Some(result.unwrap());
+        }
+    }
+
+    let resumed = last.unwrap();
+
+    assert_eq!(resumed.conversation(), reference.conversation());
+    assert_eq!(ids, ["chatterg-1", "chatterg-2", "chatterg-3", "chatterg-4", "chatterg-5"]);
+
+    // No question repeated.
+    let mut unique = asked.clone();
+    unique.dedup();
+    assert_eq!(unique, asked);
+
+    let stored = SqliteStore::open(&path).unwrap().load().await.unwrap().unwrap();
+    assert_eq!(stored, *reference.conversation());
+}
+
+#[tokio::test]
+async fn completed_conversation_is_not_asked_again() {
+    let store = Arc::new(SqliteStore::memory().unwrap());
+
+    run(questionnaire(), "http://mock.local", &MockTransport::new(ANSWERS), Arc::clone(&store))
+        .await
+        .unwrap();
+
+    let second = MockTransport::new(Vec::<String>::new());
+    let engine = run(questionnaire(), "http://mock.local", &second, store).await.unwrap();
+
+    assert_eq!(engine.start(), EngineState::Complete);
+    assert!(second.sent().is_empty());
+}
+
+#[tokio::test]
+async fn aborted_conversation_is_not_resumed() {
+    let store = Arc::new(SqliteStore::memory().unwrap());
+
+    // Required integer-like enum answer is invalid and default policy is abort.
+    let questionnaire: Questionnaire = serde_yaml::from_str(
+        "questions:\n  - {id: a, question: Q, required: true, type: enum, values: [x]}\n",
+    )
+    .unwrap();
+
+    let first = run(
+        questionnaire.clone(),
+        "http://mock.local",
+        &MockTransport::new(["nope"]),
+        Arc::clone(&store),
+    )
+    .await
+    .unwrap();
+    assert_eq!(first.start(), EngineState::Aborted);
+
+    let second = MockTransport::new(["x"]);
+    let engine = run(questionnaire, "http://mock.local", &second, store).await.unwrap();
+
+    assert_eq!(engine.start(), EngineState::Aborted);
+    assert!(second.sent().is_empty());
+}
+
+#[tokio::test]
+async fn invalid_target_is_reported() {
+    let store = Arc::new(SqliteStore::memory().unwrap());
+    let result = run(questionnaire(), "not a url", &MockTransport::new(ANSWERS), store).await;
+
+    assert!(matches!(result, Err(ApplicationError::InvalidTarget(_))));
+}
+
+#[tokio::test]
+async fn resuming_with_a_different_questionnaire_is_rejected() {
+    let store = Arc::new(SqliteStore::memory().unwrap());
+
+    run(questionnaire(), "http://mock.local", &MockTransport::new(["Acme"]), Arc::clone(&store))
+        .await
+        .unwrap_err();
+
+    let other: Questionnaire = serde_yaml::from_str(
+        "questions:\n  - {id: other, question: Q, required: true, type: string}\n",
+    )
+    .unwrap();
+
+    let result = run(other, "http://mock.local", &MockTransport::new(["x"]), store).await;
+    assert!(matches!(result, Err(ApplicationError::Domain(_))));
 }

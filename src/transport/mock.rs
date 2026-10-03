@@ -8,11 +8,20 @@ use super::{Capabilities, Message, Protocol, Response, Transport, TransportError
 #[derive(Clone)]
 pub struct MockTransport {
     responses: Arc<Mutex<Vec<String>>>,
+    sent: Arc<Mutex<Vec<Message>>>,
 }
 
 impl MockTransport {
     pub fn new(responses: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        Self { responses: Arc::new(Mutex::new(responses.into_iter().map(Into::into).collect())) }
+        Self {
+            responses: Arc::new(Mutex::new(responses.into_iter().map(Into::into).collect())),
+            sent: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    /// Messages that were successfully exchanged, in order.
+    pub fn sent(&self) -> Vec<Message> {
+        self.sent.lock().map(|sent| sent.clone()).unwrap_or_default()
     }
 }
 
@@ -22,15 +31,21 @@ impl Transport for MockTransport {
         Ok(Capabilities { protocols: vec![Protocol::Http], endpoint: target.clone() })
     }
 
-    async fn send(&self, _target: &Url, _message: Message) -> Result<Response, TransportError> {
+    async fn send(&self, _target: &Url, message: Message) -> Result<Response, TransportError> {
         let mut responses = self
             .responses
             .lock()
-            .map_err(|_| TransportError::Other("mock state poisoned".into()))?;
+            .map_err(|_| TransportError::Internal("mock state poisoned".into()))?;
 
-        match responses.is_empty() {
-            false => Ok(Response { text: responses.remove(0) }),
-            true => Err(TransportError::Other("mock response queue exhausted".into())),
+        if responses.is_empty() {
+            return Err(TransportError::Internal("mock response queue exhausted".into()));
         }
+
+        self.sent
+            .lock()
+            .map_err(|_| TransportError::Internal("mock state poisoned".into()))?
+            .push(message);
+
+        Ok(Response { text: responses.remove(0) })
     }
 }

@@ -1,12 +1,9 @@
-use std::sync::Arc;
+use std::{error::Error, path::PathBuf, process::ExitCode, sync::Arc};
 
 use clap::Parser;
 
 use chatterg::{
-    application,
-    domain::{Engine, Questionnaire},
-    output::human,
-    storage::sqlite::SqliteStore,
+    application, domain::Questionnaire, output::human, storage::sqlite::SqliteStore,
     transport::a2a::A2aTransport,
 };
 
@@ -14,34 +11,48 @@ use chatterg::{
 #[command(name = "chatterg")]
 #[command(about = "Deterministic bot-to-bot questionnaire client")]
 struct Cli {
-    /// Target A2A agent URL.
+    /// Target A2A agent URL (the agent card is fetched from
+    /// `<AGENT_URL>/.well-known/agent-card.json`).
+    #[arg(value_name = "AGENT_URL")]
     target: String,
 
     /// Questionnaire YAML file.
-    questions: String,
+    #[arg(value_name = "QUESTIONS_YAML")]
+    questions: PathBuf,
 
-    /// SQLite database path.
-    #[arg(long, default_value = "chatterg.db")]
-    store: String,
+    /// SQLite database path. Re-running with the same path resumes the questionnaire.
+    #[arg(long, value_name = "SQLITE_PATH", default_value = "chatterg.db")]
+    store: PathBuf,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
-
+async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     let questionnaire = Questionnaire::from_path(&cli.questions)?;
-
-    if questionnaire.is_empty() {
-        return Err("questionnaire contains no questions".into());
-    }
-
-    let engine = Engine::new(questionnaire);
-    let transport = A2aTransport::new();
     let store = Arc::new(SqliteStore::open(&cli.store)?);
+    let transport = A2aTransport::new();
 
-    let engine = application::run(engine, &cli.target, &transport, Arc::clone(&store)).await?;
+    let engine = application::run(questionnaire, &cli.target, &transport, store).await?;
 
     print!("{}", human::render(engine.conversation()));
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() -> ExitCode {
+    let cli = Cli::parse();
+
+    match run(cli).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("error: {error}");
+
+            let mut source = error.source();
+            while let Some(cause) = source {
+                eprintln!("  caused by: {cause}");
+                source = cause.source();
+            }
+
+            ExitCode::FAILURE
+        }
+    }
 }

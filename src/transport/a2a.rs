@@ -1,9 +1,13 @@
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use url::Url;
 
 use super::{Capabilities, Message, Protocol, Response, Transport, TransportError};
+
+const A2A_VERSION: &str = "1.0";
+const SEND_METHOD: &str = "message/send";
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AgentCard {
@@ -44,7 +48,7 @@ struct SendMessageParams {
 struct A2aMessage {
     #[serde(rename = "messageId")]
     message_id: String,
-    role: String,
+    role: &'static str,
     parts: Vec<Part>,
 }
 
@@ -56,45 +60,8 @@ struct Part {
 
 #[derive(Debug, Deserialize)]
 struct JsonRpcResponse {
-    result: Option<SendMessageResult>,
+    result: Option<Value>,
     error: Option<JsonRpcError>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum SendMessageResult {
-    Message(A2aResponseMessage),
-    Task(Task),
-}
-
-#[derive(Debug, Deserialize)]
-struct A2aResponseMessage {
-    parts: Vec<ResponsePart>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ResponsePart {
-    #[allow(dead_code)]
-    kind: Option<String>,
-    text: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Task {
-    #[allow(dead_code)]
-    id: String,
-
-    #[allow(dead_code)]
-    status: TaskStatus,
-}
-
-#[derive(Debug, Deserialize)]
-struct TaskStatus {
-    #[allow(dead_code)]
-    state: String,
-
-    #[allow(dead_code)]
-    message: Option<A2aResponseMessage>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,43 +80,105 @@ impl Default for A2aTransport {
     }
 }
 
+fn network(error: reqwest::Error) -> TransportError {
+    TransportError::Network(Box::new(error))
+}
+
+fn check_status(response: reqwest::Response) -> Result<reqwest::Response, TransportError> {
+    let status = response.status();
+
+    if status.is_success() {
+        Ok(response)
+    } else {
+        Err(TransportError::Http { status: status.as_u16() })
+    }
+}
+
 impl A2aTransport {
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// `<target path>/.well-known/agent-card.json`, preserving any path prefix.
     pub fn agent_card_url(target: &Url) -> Result<Url, TransportError> {
+        if !matches!(target.scheme(), "http" | "https") {
+            return Err(TransportError::UnsupportedProtocol);
+        }
+
         let mut url = target.clone();
-        let path = url.path().trim_end_matches('/');
+        url.set_query(None);
+        url.set_fragment(None);
+
+        let path = url.path().trim_end_matches('/').to_owned();
         url.set_path(&format!("{path}/.well-known/agent-card.json"));
+
         Ok(url)
     }
 
     pub async fn agent_card(&self, target: &Url) -> Result<AgentCard, TransportError> {
         let url = Self::agent_card_url(target)?;
 
-        self.client
+        let response = self
+            .client
             .get(url)
-            .header("A2A-Version", "1.0")
+            .header("A2A-Version", A2A_VERSION)
             .send()
             .await
-            .map_err(|error| TransportError::Other(error.to_string()))?
-            .error_for_status()
-            .map_err(|error| TransportError::Other(error.to_string()))?
-            .json::<AgentCard>()
-            .await
-            .map_err(|error| TransportError::Other(error.to_string()))
+            .map_err(network)?;
+
+        let body = check_status(response)?.text().await.map_err(network)?;
+
+        serde_json::from_str(&body)
+            .map_err(|error| TransportError::MalformedCard(error.to_string()))
     }
 
-    fn interface(card: &AgentCard) -> Result<&AgentInterface, TransportError> {
+    pub fn interface(card: &AgentCard) -> Result<&AgentInterface, TransportError> {
         card.supported_interfaces
             .iter()
             .find(|interface| {
                 interface.protocol_binding.eq_ignore_ascii_case("JSONRPC")
                     && (interface.protocol_version.is_empty()
-                        || interface.protocol_version == "1.0")
+                        || interface.protocol_version == A2A_VERSION)
             })
             .ok_or(TransportError::UnsupportedProtocol)
+    }
+
+    /// Extracts the agent's text from a `message/send` JSON-RPC `result`.
+    ///
+    /// Supported shapes:
+    /// - `result.message`
+    /// - `result.task.status.message`
+    /// - `result` is itself a message (has `parts`)
+    /// - `result` is itself a task (has `status`)
+    pub fn extract_text(result: &Value) -> Result<String, TransportError> {
+        let message = if let Some(message) = result.get("message") {
+            Some(message)
+        } else if let Some(task) = result.get("task") {
+            task.pointer("/status/message")
+        } else if result.get("parts").is_some() {
+            Some(result)
+        } else if result.get("status").is_some() {
+            result.pointer("/status/message")
+        } else {
+            return Err(TransportError::MalformedResponse(
+                "result is neither a message nor a task".into(),
+            ));
+        };
+
+        let message = message
+            .filter(|message| !message.is_null())
+            .ok_or_else(|| TransportError::MalformedResponse("task contains no message".into()))?;
+
+        let parts = message
+            .get("parts")
+            .and_then(Value::as_array)
+            .ok_or_else(|| TransportError::MalformedResponse("message has no parts".into()))?;
+
+        Ok(parts
+            .iter()
+            .filter_map(|part| part.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"))
     }
 
     async fn send_message(
@@ -160,11 +189,11 @@ impl A2aTransport {
         let request = JsonRpcRequest {
             jsonrpc: "2.0",
             id: 1,
-            method: "message/send",
+            method: SEND_METHOD,
             params: SendMessageParams {
                 message: A2aMessage {
-                    message_id: "chatterg-1".to_string(),
-                    role: "user".to_string(),
+                    message_id: message.id,
+                    role: "user",
                     parts: vec![Part { kind: "text", text: message.text }],
                 },
             },
@@ -174,55 +203,26 @@ impl A2aTransport {
             .client
             .post(endpoint.clone())
             .header("Content-Type", "application/json")
-            .header("A2A-Version", "1.0")
+            .header("A2A-Version", A2A_VERSION)
             .json(&request)
             .send()
             .await
-            .map_err(|error| TransportError::Other(error.to_string()))?
-            .error_for_status()
-            .map_err(|error| TransportError::Other(error.to_string()))?
-            .json::<JsonRpcResponse>()
-            .await
-            .map_err(|error| TransportError::Other(error.to_string()))?;
+            .map_err(network)?;
+
+        let body = check_status(response)?.text().await.map_err(network)?;
+
+        let response: JsonRpcResponse = serde_json::from_str(&body)
+            .map_err(|error| TransportError::MalformedResponse(error.to_string()))?;
 
         if let Some(error) = response.error {
-            return Err(TransportError::Other(format!(
-                "A2A error {}: {}",
-                error.code, error.message
-            )));
+            return Err(TransportError::Protocol { code: error.code, message: error.message });
         }
 
-        match response.result {
-            Some(SendMessageResult::Message(message)) => {
-                let text = message
-                    .parts
-                    .into_iter()
-                    .filter_map(|part| part.text)
-                    .collect::<Vec<_>>()
-                    .join("\n");
+        let result = response.result.ok_or_else(|| {
+            TransportError::MalformedResponse("response contained neither result nor error".into())
+        })?;
 
-                Ok(Response { text })
-            }
-
-            Some(SendMessageResult::Task(task)) => task
-                .status
-                .message
-                .map(|message| Response {
-                    text: message
-                        .parts
-                        .into_iter()
-                        .filter_map(|part| part.text)
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                })
-                .ok_or_else(|| {
-                    TransportError::Other("A2A task response did not contain a message".to_string())
-                }),
-
-            None => Err(TransportError::Other(
-                "A2A response contained neither result nor error".to_string(),
-            )),
-        }
+        Ok(Response { text: Self::extract_text(&result)? })
     }
 }
 
@@ -232,10 +232,11 @@ impl Transport for A2aTransport {
         let card = self.agent_card(target).await?;
         let interface = Self::interface(&card)?;
 
-        let endpoint =
-            Url::parse(&interface.url).map_err(|error| TransportError::Other(error.to_string()))?;
+        let endpoint = Url::parse(&interface.url).map_err(|error| {
+            TransportError::MalformedCard(format!("invalid interface url: {error}"))
+        })?;
 
-        if endpoint.scheme() != "http" && endpoint.scheme() != "https" {
+        if !matches!(endpoint.scheme(), "http" | "https") {
             return Err(TransportError::UnsupportedProtocol);
         }
 
@@ -244,5 +245,140 @@ impl Transport for A2aTransport {
 
     async fn send(&self, target: &Url, message: Message) -> Result<Response, TransportError> {
         self.send_message(target, message).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    fn card_url(target: &str) -> String {
+        A2aTransport::agent_card_url(&Url::parse(target).unwrap()).unwrap().to_string()
+    }
+
+    #[test]
+    fn card_url_for_root() {
+        assert_eq!(
+            card_url("https://example.com"),
+            "https://example.com/.well-known/agent-card.json"
+        );
+        assert_eq!(
+            card_url("https://example.com/"),
+            "https://example.com/.well-known/agent-card.json"
+        );
+    }
+
+    #[test]
+    fn card_url_keeps_path_prefix() {
+        assert_eq!(
+            card_url("https://flowmarket.social/nxtbrane"),
+            "https://flowmarket.social/nxtbrane/.well-known/agent-card.json"
+        );
+        assert_eq!(
+            card_url("https://flowmarket.social/nxtbrane/"),
+            "https://flowmarket.social/nxtbrane/.well-known/agent-card.json"
+        );
+    }
+
+    #[test]
+    fn card_url_drops_query_and_fragment() {
+        assert_eq!(
+            card_url("https://example.com/a?x=1#frag"),
+            "https://example.com/a/.well-known/agent-card.json"
+        );
+    }
+
+    #[test]
+    fn card_url_rejects_unsupported_scheme() {
+        let url = Url::parse("ftp://example.com/a").unwrap();
+        assert!(matches!(
+            A2aTransport::agent_card_url(&url),
+            Err(TransportError::UnsupportedProtocol)
+        ));
+    }
+
+    fn interface(binding: &str, version: &str) -> AgentInterface {
+        AgentInterface {
+            url: "https://example.com/rpc".into(),
+            protocol_binding: binding.into(),
+            protocol_version: version.into(),
+        }
+    }
+
+    fn card(interfaces: Vec<AgentInterface>) -> AgentCard {
+        AgentCard { name: "t".into(), description: None, supported_interfaces: interfaces }
+    }
+
+    #[test]
+    fn selects_jsonrpc_interface() {
+        let card = card(vec![interface("GRPC", "1.0"), interface("jsonrpc", "1.0")]);
+        assert_eq!(A2aTransport::interface(&card).unwrap().protocol_binding, "jsonrpc");
+    }
+
+    #[test]
+    fn rejects_card_without_supported_interface() {
+        let card = card(vec![interface("GRPC", "1.0"), interface("JSONRPC", "2.0")]);
+        assert!(matches!(A2aTransport::interface(&card), Err(TransportError::UnsupportedProtocol)));
+    }
+
+    #[test]
+    fn extracts_direct_message() {
+        let result = json!({"message": {"parts": [{"kind": "text", "text": "hi"}]}});
+        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "hi");
+    }
+
+    #[test]
+    fn extracts_flat_message() {
+        let result = json!({"kind": "message", "parts": [{"kind": "text", "text": "hi"}]});
+        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "hi");
+    }
+
+    #[test]
+    fn extracts_wrapped_task() {
+        let result = json!({"task": {"status": {"message": {"parts": [{"text": "done"}]}}}});
+        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "done");
+    }
+
+    #[test]
+    fn extracts_flat_task() {
+        let result = json!({"kind": "task", "status": {"state": "completed",
+            "message": {"parts": [{"kind": "text", "text": "done"}]}}});
+        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "done");
+    }
+
+    #[test]
+    fn joins_multiple_text_parts_and_skips_non_text() {
+        let result = json!({"message": {"parts": [
+            {"kind": "text", "text": "a"},
+            {"kind": "data", "data": {}},
+            {"kind": "text", "text": "b"}
+        ]}});
+        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "a\nb");
+    }
+
+    #[test]
+    fn empty_parts_yield_empty_text() {
+        let result = json!({"message": {"parts": []}});
+        assert_eq!(A2aTransport::extract_text(&result).unwrap(), "");
+    }
+
+    #[test]
+    fn task_without_message_is_malformed() {
+        let result = json!({"kind": "task", "status": {"state": "working"}});
+        assert!(matches!(
+            A2aTransport::extract_text(&result),
+            Err(TransportError::MalformedResponse(_))
+        ));
+    }
+
+    #[test]
+    fn unknown_result_shape_is_malformed() {
+        let result = json!({"something": "else"});
+        assert!(matches!(
+            A2aTransport::extract_text(&result),
+            Err(TransportError::MalformedResponse(_))
+        ));
     }
 }

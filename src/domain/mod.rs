@@ -12,3 +12,4 @@ pub use question::*;
 pub use questionnaire::*;
 
 pub use engine::*;
+pub use error::DomainError;
