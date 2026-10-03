@@ -14,11 +14,15 @@ use chatterg::{
 #[command(name = "chatterg")]
 #[command(about = "Deterministic bot-to-bot questionnaire client")]
 struct Cli {
-    /// Target agent URL.
+    /// Target A2A agent URL.
     target: String,
 
-    /// Questionnaire file.
+    /// Questionnaire YAML file.
     questions: String,
+
+    /// SQLite database path.
+    #[arg(long, default_value = "chatterg.db")]
+    store: String,
 }
 
 #[tokio::main]
@@ -26,12 +30,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     let questionnaire = Questionnaire::from_path(&cli.questions)?;
+
+    if questionnaire.is_empty() {
+        return Err("questionnaire contains no questions".into());
+    }
+
     let engine = Engine::new(questionnaire);
-
     let transport = A2aTransport::new();
-    let store = Arc::new(SqliteStore::open("chatterg.db")?);
+    let store = Arc::new(SqliteStore::open(&cli.store)?);
 
-    let engine = application::run(engine, &cli.target, &transport, store).await?;
+    let engine = application::run(engine, &cli.target, &transport, Arc::clone(&store)).await?;
 
     print!("{}", human::render(engine.conversation()));
 
