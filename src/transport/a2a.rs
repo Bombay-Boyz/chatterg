@@ -20,10 +20,10 @@ pub struct AgentCard {
 pub struct AgentInterface {
     pub url: String,
 
-    #[serde(rename = "protocolBinding")]
+    #[serde(rename = "protocolBinding", alias = "protocol")]
     pub protocol_binding: String,
 
-    #[serde(rename = "protocolVersion")]
+    #[serde(default, rename = "protocolVersion")]
     pub protocol_version: String,
 }
 
@@ -50,6 +50,7 @@ struct A2aMessage {
 
 #[derive(Debug, Serialize)]
 struct Part {
+    kind: &'static str,
     text: String,
 }
 
@@ -73,6 +74,8 @@ struct A2aResponseMessage {
 
 #[derive(Debug, Deserialize)]
 struct ResponsePart {
+    #[allow(dead_code)]
+    kind: Option<String>,
     text: Option<String>,
 }
 
@@ -116,9 +119,10 @@ impl A2aTransport {
     }
 
     pub fn agent_card_url(target: &Url) -> Result<Url, TransportError> {
-        target
-            .join(".well-known/agent-card.json")
-            .map_err(|error| TransportError::Other(error.to_string()))
+        let mut url = target.clone();
+        let path = url.path().trim_end_matches('/');
+        url.set_path(&format!("{path}/.well-known/agent-card.json"));
+        Ok(url)
     }
 
     pub async fn agent_card(&self, target: &Url) -> Result<AgentCard, TransportError> {
@@ -142,7 +146,8 @@ impl A2aTransport {
             .iter()
             .find(|interface| {
                 interface.protocol_binding.eq_ignore_ascii_case("JSONRPC")
-                    && interface.protocol_version == "1.0"
+                    && (interface.protocol_version.is_empty()
+                        || interface.protocol_version == "1.0")
             })
             .ok_or(TransportError::UnsupportedProtocol)
     }
@@ -155,12 +160,12 @@ impl A2aTransport {
         let request = JsonRpcRequest {
             jsonrpc: "2.0",
             id: 1,
-            method: "SendMessage",
+            method: "message/send",
             params: SendMessageParams {
                 message: A2aMessage {
                     message_id: "chatterg-1".to_string(),
-                    role: "ROLE_USER".to_string(),
-                    parts: vec![Part { text: message.text }],
+                    role: "user".to_string(),
+                    parts: vec![Part { kind: "text", text: message.text }],
                 },
             },
         };

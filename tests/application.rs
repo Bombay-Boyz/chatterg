@@ -42,13 +42,14 @@ async fn a2a_send_receives_message_response() {
         .match_body(mockito::Matcher::Json(serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
-            "method": "SendMessage",
+            "method": "message/send",
             "params": {
                 "message": {
                     "messageId": "chatterg-1",
-                    "role": "ROLE_USER",
+                    "role": "user",
                     "parts": [
                         {
+                            "kind": "text",
                             "text": "What is your name?"
                         }
                     ]
@@ -62,13 +63,25 @@ async fn a2a_send_receives_message_response() {
                 "jsonrpc": "2.0",
                 "id": 1,
                 "result": {
-                    "messageId": "agent-1",
-                    "role": "ROLE_AGENT",
-                    "parts": [
-                        {
-                            "text": "I am Test Agent."
+                    "kind": "task",
+                    "id": "task-1",
+                    "contextId": "context-1",
+                    "status": {
+                        "state": "completed",
+                        "message": {
+                            "kind": "message",
+                            "role": "agent",
+                            "messageId": "agent-1",
+                            "taskId": "task-1",
+                            "contextId": "context-1",
+                            "parts": [
+                                {
+                                    "kind": "text",
+                                    "text": "I am Test Agent."
+                                }
+                            ]
                         }
-                    ]
+                    }
                 }
             }"#,
         )
