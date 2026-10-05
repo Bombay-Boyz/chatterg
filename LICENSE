@@ -1,0 +1,114 @@
+PROPRIETARY SOFTWARE LICENSE
+Copyright (c) 2026 Bombay-Boyz
+All Rights Reserved.
+
+ChatterG
+
+1. OWNERSHIP
+
+The ChatterG software, including its source code, object code, documentation,
+configuration, tests, scripts, data definitions, and associated materials
+(the "Software"), is proprietary software owned by Bombay-Boyz ("Owner"),
+unless otherwise expressly stated in writing.
+
+All rights not expressly granted under this license are reserved by the Owner.
+
+2. NO LICENSE GRANT
+
+No license, right, title, or interest in or to the Software is granted,
+whether express, implied, by estoppel, or otherwise, except for the limited
+rights expressly provided in a separate written agreement signed by the Owner.
+
+Publication of the Software in a public source-code repository does not
+constitute the grant of an open-source license.
+
+3. RESTRICTIONS
+
+Without prior written permission from the Owner, no person or entity may:
+
+(a) copy, reproduce, or redistribute the Software;
+
+(b) modify, adapt, translate, or create derivative works based on the Software;
+
+(c) sell, sublicense, lease, rent, distribute, or otherwise commercially
+    exploit the Software;
+
+(d) incorporate the Software or any substantial portion of it into another
+    software product or service;
+
+(e) use the Software or any substantial portion of it for the purpose of
+    creating a competing product or service;
+
+(f) remove, alter, or obscure copyright, trademark, proprietary, or other
+    ownership notices contained in the Software; or
+
+(g) grant any rights in the Software to a third party.
+
+4. PERSONAL EVALUATION
+
+Unless expressly prohibited by the Owner in writing, a person who has
+legitimate access to the public repository may inspect the source code for
+personal, non-commercial evaluation purposes.
+
+Such access does not grant permission to copy, modify, redistribute,
+commercially exploit, or create derivative works from the Software.
+
+5. THIRD-PARTY COMPONENTS
+
+The Software may depend upon third-party libraries, packages, tools, or other
+components that are distributed under their own licenses.
+
+Nothing in this license modifies, restricts, or supersedes the rights granted
+under the applicable license of any third-party component.
+
+Third-party components remain subject to their respective licenses.
+
+6. CONFIDENTIALITY
+
+The Owner may designate portions of the Software, documentation, technical
+information, credentials, specifications, or other materials as confidential.
+Nothing in this license grants permission to disclose such confidential
+materials.
+
+7. TRADEMARKS
+
+Names, logos, product names, service names, and other marks associated with
+the Owner or the Software are not licensed under this agreement.
+
+8. TERMINATION
+
+Any permission granted under a separate written agreement may be terminated
+in accordance with that agreement.
+
+Upon termination, the recipient must cease all use of the Software and, where
+required by the applicable agreement, destroy copies in its possession or
+control.
+
+9. DISCLAIMER
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTIES OF
+ANY KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING, WITHOUT LIMITATION, WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND
+NON-INFRINGEMENT, TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW.
+
+10. LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE OWNER SHALL NOT BE
+LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR
+PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA, BUSINESS, OR
+GOODWILL ARISING OUT OF OR RELATING TO THE SOFTWARE OR ITS USE.
+
+11. GOVERNING LAW
+
+This license shall be governed by and interpreted in accordance with the laws
+applicable to the Owner, without regard to conflict-of-law principles.
+
+12. ENTIRE AGREEMENT
+
+This document constitutes the complete license terms governing the Software
+unless superseded by a separate written agreement signed by the Owner.
+
+13. COPYRIGHT NOTICE
+
+Copyright (c) 2026 Bombay-Boyz
+All Rights Reserved.

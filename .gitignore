@@ -1,5 +1,159 @@
-/target
+# ============================================================
+# Rust / Cargo
+# ============================================================
+
+/target/
+/doc/
+
+# ============================================================
+# Rust Analyzer / IDE
+# ============================================================
+
+/.rustc_info.json
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# JetBrains / IntelliJ / RustRover
+.idea/
+*.iml
+
+# Vim / Neovim
+*.swp
+*.swo
+*.swn
+*~
+Session.vim
+
+# Emacs
+.#*
+*#
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# ============================================================
+# Operating System Files
+# ============================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+
+# ============================================================
+# Environment / Secrets
+# ============================================================
+
+.env
+.env.*
+!.env.example
+
+*.local
+*.secret
+*.secrets
+
+# Private keys / certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# SSH keys accidentally placed in project
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# ============================================================
+# Logs / Temporary Files
+# ============================================================
+
+*.log
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+
+# ============================================================
+# Databases / Runtime State
+# ============================================================
+
+# SQLite
 *.db
 *.db-shm
 *.db-wal
-.env
+*.sqlite
+*.sqlite3
+
+# ChatterG runtime databases
+/run-*.db
+/zeolite_nxtbrane.db
+
+# ============================================================
+# Test / Coverage / Profiling
+# ============================================================
+
+/coverage/
+/lcov.info
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+
+# ============================================================
+# Generated Documentation / Sites
+# ============================================================
+
+/book/book/
+/docs/build/
+/site/
+
+# ============================================================
+# Benchmark / Profiling Output
+# ============================================================
+
+/criterion/
+
+# ============================================================
+# Rust Generated Files
+# ============================================================
+
+*.rs.bk
+*.rmeta
+*.rlib
+
+# ============================================================
+# Local / Generated Data
+# ============================================================
+
+# Uncomment these only if these directories are generated data:
+# /tmp/
+# /data/
+# /output/
+
+# ============================================================
+# Patch / Editor Artifacts
+# ============================================================
+
+*.patch
+*.orig
+*.rej
