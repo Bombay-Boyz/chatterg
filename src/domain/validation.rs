@@ -14,6 +14,11 @@ pub fn validate(question: &Question, response: &str) -> ValidationStatus {
         };
     }
 
+    let lowered = response.to_lowercase();
+    if question.reject_if_contains.iter().any(|phrase| lowered.contains(&phrase.to_lowercase())) {
+        return ValidationStatus::Rejected;
+    }
+
     match &question.answer_type {
         AnswerType::String | AnswerType::Text => ValidationStatus::Accepted,
 

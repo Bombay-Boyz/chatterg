@@ -54,6 +54,10 @@ impl Engine {
         }
     }
 
+    pub fn total_questions(&self) -> usize {
+        self.questionnaire.questions.len()
+    }
+
     pub fn position(&self) -> usize {
         self.conversation.position
     }

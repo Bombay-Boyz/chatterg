@@ -1,0 +1,133 @@
+# Zeolite membranes question set (one per line; blank lines and # comments are ignored)
+
+What is a zeolite, and why are zeolites useful for membrane separations?
+What makes zeolite membranes different from conventional polymeric membranes?
+How does the pore size of a zeolite affect molecular separation?
+What is the difference between a zeolite molecular sieve and a zeolite membrane?
+Which zeolite structures are most commonly used for membrane applications?
+What makes MFI zeolite attractive for membrane separations?
+What are the main characteristics of LTA zeolite membranes?
+How does FAU zeolite differ from MFI for membrane applications?
+What is the role of zeolite framework topology in membrane performance?
+How does zeolite hydrophilicity or hydrophobicity affect separation performance?
+
+How do zeolite membranes separate molecules?
+What transport mechanisms operate in zeolite membranes?
+What is molecular sieving in a zeolite membrane?
+How does adsorption affect transport through a zeolite membrane?
+What is the difference between adsorption selectivity and diffusion selectivity?
+How does the kinetic diameter of a molecule affect its transport through a zeolite?
+Why can two molecules with similar molecular sizes behave very differently in a zeolite membrane?
+How does temperature affect transport through a zeolite membrane?
+How does pressure affect zeolite membrane separation?
+How does feed composition affect zeolite membrane performance?
+
+What is a zeolite membrane's permeance?
+What is the difference between permeability and permeance?
+How is membrane selectivity calculated?
+What is ideal selectivity in a membrane?
+What is separation factor in membrane science?
+Why is permeance often more useful than permeability for thin membranes?
+What determines the flux through a zeolite membrane?
+How should zeolite membrane performance be compared between different studies?
+What experimental parameters must be reported to make membrane results reproducible?
+What are the most important metrics for evaluating a zeolite membrane?
+
+How are zeolite membranes synthesized?
+What is hydrothermal synthesis of zeolite membranes?
+What is secondary growth synthesis?
+How does seeding influence zeolite membrane formation?
+What is in-situ crystallization of a zeolite membrane?
+How does the choice of support affect zeolite membrane synthesis?
+What types of supports are commonly used for zeolite membranes?
+How does support pore size affect zeolite membrane growth?
+What factors control the thickness of a zeolite membrane layer?
+How can the synthesis of zeolite membranes be made more reproducible?
+
+What causes defects in zeolite membranes?
+How can non-selective defects affect membrane performance?
+How can pinholes be detected in a zeolite membrane?
+What is the difference between intercrystalline and intracrystalline transport?
+How do grain boundaries affect zeolite membrane selectivity?
+How can grain-boundary defects be reduced?
+What techniques are used to seal defects in zeolite membranes?
+How can one distinguish true molecular-sieving performance from transport through defects?
+Why can a membrane have high flux but poor selectivity?
+Why can a membrane show high selectivity but very low flux?
+
+How is the quality of a zeolite membrane characterized?
+What information does XRD provide for zeolite membrane characterization?
+How is SEM used to characterize zeolite membranes?
+What can TEM reveal about a zeolite membrane?
+How is AFM useful for studying zeolite membrane surfaces?
+How can gas permeation experiments be used to evaluate membrane defects?
+What is a single-gas permeation test?
+Why are mixed-gas permeation tests important?
+Why can single-gas selectivity differ substantially from mixed-gas selectivity?
+What experimental controls are needed when measuring zeolite membrane performance?
+
+Which gas separations are particularly suitable for zeolite membranes?
+Can zeolite membranes be used for CO2 separation?
+How can zeolite membranes be used for CO2/CH4 separation?
+How can zeolite membranes separate N2 from CH4?
+Can zeolite membranes be used for hydrogen purification?
+How can zeolite membranes be used for H2/CO2 separation?
+Can zeolite membranes separate water from organic solvents?
+Why are zeolite membranes attractive for dehydration of organic solvents?
+How can zeolite membranes be used for ethanol/water separation?
+What role can zeolite membranes play in hydrocarbon separations?
+
+What are the advantages of zeolite membranes for dehydration?
+How does hydrophilicity influence pervaporation through zeolite membranes?
+What is pervaporation and how does it differ from gas permeation?
+Which zeolite structures are commonly considered for alcohol dehydration?
+How does water preferentially permeate through hydrophilic zeolite membranes?
+How does membrane performance change as the water concentration in the feed changes?
+What happens to zeolite membrane performance when organic molecules compete with water for adsorption sites?
+What are the main challenges in scaling zeolite membranes for industrial dehydration?
+How does feed temperature influence pervaporation through zeolite membranes?
+How should a zeolite dehydration membrane be evaluated against conventional distillation?
+
+What are the main advantages of zeolite membranes over polymer membranes?
+What are the main disadvantages of zeolite membranes?
+Why can zeolite membranes operate at temperatures that are difficult for many polymer membranes?
+How does chemical stability compare between zeolite and polymer membranes?
+How does mechanical stability affect industrial zeolite membrane applications?
+What limits the commercial adoption of zeolite membranes?
+What are the biggest scale-up challenges for zeolite membrane manufacturing?
+How important is membrane module design for zeolite membrane commercialization?
+What are the economics of zeolite membranes compared with conventional separation technologies?
+Where are zeolite membranes most likely to provide an economic advantage?
+
+What is Nxtbrane?
+What problem is Nxtbrane trying to solve?
+How does Nxtbrane relate to membrane technology?
+What role do zeolite membranes play in the Nxtbrane technology?
+What types of separation processes is Nxtbrane designed for?
+What materials or membrane architectures does Nxtbrane use?
+What makes Nxtbrane different from conventional membrane technologies?
+What are the potential industrial applications of Nxtbrane?
+What are the technical advantages claimed for Nxtbrane?
+What are the main technical challenges that Nxtbrane would need to overcome for large-scale deployment?
+
+How could Nxtbrane improve the energy efficiency of industrial separations?
+Which industrial processes could potentially benefit most from Nxtbrane?
+How should the performance of Nxtbrane membranes be measured?
+What membrane metrics would be most important when evaluating Nxtbrane?
+How would you compare Nxtbrane with polymeric membranes?
+How would you compare Nxtbrane with inorganic membranes?
+How would you compare Nxtbrane with conventional distillation?
+What evidence would be needed to validate Nxtbrane's commercial claims?
+What laboratory results would be necessary before Nxtbrane could be considered industrially ready?
+What questions should an industrial customer ask before adopting Nxtbrane?
+
+What is the relationship between zeolite membrane thickness and permeance?
+What trade-offs exist between membrane selectivity and flux?
+How does membrane thickness affect industrial membrane economics?
+How can thin zeolite membranes be manufactured without increasing defect density?
+How does scale-up from a laboratory membrane to a membrane module change the engineering problem?
+What failure modes should be considered when operating zeolite membranes continuously?
+How should zeolite membranes be cleaned and maintained?
+How resistant are zeolite membranes to fouling?
+How should long-term stability of a zeolite membrane be demonstrated?
+What would a convincing 1,000-hour stability test for a zeolite membrane look like?

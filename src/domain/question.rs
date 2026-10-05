@@ -64,4 +64,13 @@ pub struct Question {
 
     #[serde(default)]
     pub on_failure: FailurePolicy,
+
+    /// Case-insensitive phrases that make an answer count as evasive (rejected),
+    /// e.g. "meeting", "schedule a call".
+    #[serde(default)]
+    pub reject_if_contains: Vec<String>,
+
+    /// Text to send on retries instead of repeating `question` verbatim.
+    #[serde(default)]
+    pub followup: Option<String>,
 }

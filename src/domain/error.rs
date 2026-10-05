@@ -23,6 +23,14 @@ pub enum DomainError {
         source: std::io::Error,
     },
 
+    #[error("invalid question #{index} in {}: {source}", path.display())]
+    InvalidQuestion {
+        path: PathBuf,
+        index: usize,
+        #[source]
+        source: serde_yaml::Error,
+    },
+
     #[error("invalid questionnaire {}: {source}", path.display())]
     QuestionnaireParse {
         path: PathBuf,

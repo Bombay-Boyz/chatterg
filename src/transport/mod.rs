@@ -54,6 +54,18 @@ pub enum TransportError {
     Internal(String),
 }
 
+impl TransportError {
+    /// Failures that say "the agent can't answer right now" rather than "the
+    /// request is wrong": connection problems, timeouts, rate limiting, 5xx.
+    pub fn is_transient(&self) -> bool {
+        match self {
+            Self::Unreachable | Self::Network(_) => true,
+            Self::Http { status } => matches!(status, 408 | 425 | 429 | 500..=599),
+            _ => false,
+        }
+    }
+}
+
 #[async_trait]
 pub trait Transport: Send + Sync {
     async fn discover(&self, target: &Url) -> Result<Capabilities, TransportError>;

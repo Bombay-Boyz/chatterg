@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -74,9 +76,12 @@ pub struct A2aTransport {
     client: Client,
 }
 
+/// A bot that never answers must not hang the run forever.
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
+
 impl Default for A2aTransport {
     fn default() -> Self {
-        Self { client: Client::new() }
+        Self::with_timeout(DEFAULT_TIMEOUT)
     }
 }
 
@@ -97,6 +102,12 @@ fn check_status(response: reqwest::Response) -> Result<reqwest::Response, Transp
 impl A2aTransport {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Per-request timeout; a timeout surfaces as a (transient) network error.
+    pub fn with_timeout(timeout: Duration) -> Self {
+        let client = Client::builder().timeout(timeout).build().unwrap_or_default();
+        Self { client }
     }
 
     /// `<target path>/.well-known/agent-card.json`, preserving any path prefix.
