@@ -6,19 +6,27 @@ use std::{
     time::Duration,
 };
 
-use clap::Parser;
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use chatterg::{
     application::{self, ApplicationError, Progress, RunOptions},
     domain::{EngineState, QuestionDefaults, Questionnaire},
-    output::human,
-    storage::sqlite::SqliteStore,
+    output::{
+        human,
+        report::{self, Format, Report},
+    },
+    storage::{Store, sqlite::SqliteStore},
     transport::a2a::A2aTransport,
 };
 
 #[derive(Debug, Parser)]
 #[command(name = "chatterg")]
 #[command(about = "Deterministic bot-to-bot questionnaire client")]
+#[command(
+    args_conflicts_with_subcommands = true,
+    subcommand_negates_reqs = true,
+    subcommand_precedence_over_arg = true
+)]
 #[command(after_help = "\
 EXIT CODES:
   0  every question was processed (some answers may still be marked rejected)
@@ -27,6 +35,69 @@ EXIT CODES:
   3  gave up: the agent stayed unavailable for --max-waits cooldowns in a row
 ")]
 struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    /// The normal run (`chatterg <AGENT_URL> <QUESTIONS_FILE>`). Arguments are
+    /// optional here only so that `chatterg report ...` can be used instead;
+    /// clap still insists on them when no subcommand is given.
+    #[command(flatten)]
+    run: Option<RunArgs>,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Write a report (Markdown, HTML, CSV or JSON) from a finished or partial run.
+    Report(ReportArgs),
+}
+
+#[derive(Debug, Args)]
+struct ReportArgs {
+    /// The notebook to read (the --store used for the run). It is opened read-only,
+    /// so this is safe while a run is in progress.
+    #[arg(long, value_name = "SQLITE_PATH", default_value = "chatterg.db")]
+    store: PathBuf,
+
+    /// Output format. If left out it is guessed from the --out file extension
+    /// (.md, .html, .csv, .json); otherwise Markdown.
+    #[arg(long, value_enum)]
+    format: Option<ReportFormat>,
+
+    /// Write the report to this file instead of the screen.
+    #[arg(long, value_name = "FILE")]
+    out: Option<PathBuf>,
+
+    /// Replace the --out file if it already exists.
+    #[arg(long, requires = "out")]
+    overwrite: bool,
+
+    /// The questions file used for the run. Adds section headings and lists
+    /// questions that were never asked. It must match the run's questions.
+    #[arg(long, value_name = "QUESTIONS_FILE")]
+    questions: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum ReportFormat {
+    Md,
+    Html,
+    Csv,
+    Json,
+}
+
+impl From<ReportFormat> for Format {
+    fn from(format: ReportFormat) -> Self {
+        match format {
+            ReportFormat::Md => Format::Markdown,
+            ReportFormat::Html => Format::Html,
+            ReportFormat::Csv => Format::Csv,
+            ReportFormat::Json => Format::Json,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+struct RunArgs {
     /// Target A2A agent URL (the agent card is fetched from
     /// `<AGENT_URL>/.well-known/agent-card.json`).
     #[arg(value_name = "AGENT_URL")]
@@ -114,7 +185,7 @@ fn report(progress: &Progress) {
     }
 }
 
-async fn run(cli: Cli) -> Result<Outcome, Box<dyn Error>> {
+async fn run(cli: RunArgs) -> Result<Outcome, Box<dyn Error>> {
     let mut defaults =
         QuestionDefaults { max_followups: cli.retries, ..QuestionDefaults::default() };
     if !cli.reject_phrases.is_empty() {
@@ -161,11 +232,63 @@ async fn run(cli: Cli) -> Result<Outcome, Box<dyn Error>> {
     Ok(Outcome::Completed)
 }
 
+async fn make_report(args: ReportArgs) -> Result<Outcome, Box<dyn Error>> {
+    let store = SqliteStore::open_read_only(&args.store)?;
+
+    let conversation = store.load().await?.ok_or_else(|| {
+        format!("the notebook {} does not contain a run yet", args.store.display())
+    })?;
+
+    let questionnaire = match &args.questions {
+        Some(path) => {
+            let questionnaire = Questionnaire::from_path(path)?;
+            report::check_questions(&conversation, &questionnaire)?;
+            Some(questionnaire)
+        }
+        None => None,
+    };
+
+    let format = args
+        .format
+        .map(Format::from)
+        .or_else(|| args.out.as_deref().and_then(Format::from_path))
+        .unwrap_or(Format::Markdown);
+
+    let text = Report::build(&conversation, questionnaire.as_ref()).render(format);
+
+    match &args.out {
+        Some(path) => {
+            if path.exists() && !args.overwrite {
+                return Err(format!(
+                    "{} already exists; choose another name or add --overwrite",
+                    path.display()
+                )
+                .into());
+            }
+
+            std::fs::write(path, text)
+                .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+            eprintln!("wrote {}", path.display());
+        }
+        None => print!("{text}"),
+    }
+
+    Ok(Outcome::Completed)
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    match run(cli).await {
+    let result = match cli.command {
+        Some(Command::Report(args)) => make_report(args).await,
+        None => match cli.run {
+            Some(args) => run(args).await,
+            None => Err("missing arguments: expected <AGENT_URL> <QUESTIONS_FILE>".into()),
+        },
+    };
+
+    match result {
         Ok(Outcome::Completed) => ExitCode::SUCCESS,
         Ok(Outcome::EndedEarly) => ExitCode::from(EXIT_ENDED_EARLY),
         Err(error) => {

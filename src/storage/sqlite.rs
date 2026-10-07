@@ -7,7 +7,7 @@ use std::{
 
 use async_trait::async_trait;
 use fs2::FileExt;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 
 use crate::domain::Conversation;
 
@@ -79,6 +79,39 @@ impl SqliteStore {
             .map_err(|error| open_error(Box::new(error)))?;
 
         Self::initialise(connection, Some(lock), |error| open_error(Box::new(error)))
+    }
+
+    /// Opens an existing notebook for reading only. It takes no lock and never
+    /// creates or changes anything, so it is safe to use while a run is in
+    /// progress (the database uses write-ahead logging, so readers do not block).
+    pub fn open_read_only(path: impl AsRef<Path>) -> Result<Self, StorageError> {
+        let path = path.as_ref();
+        let open_error = |source: Box<dyn std::error::Error + Send + Sync>| StorageError::Open {
+            path: path.display().to_string(),
+            source,
+        };
+
+        if !path.is_file() {
+            return Err(open_error("no such notebook".into()));
+        }
+
+        let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|error| open_error(Box::new(error)))?;
+        connection.busy_timeout(BUSY_TIMEOUT).map_err(database)?;
+
+        let has_table: bool = connection
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type = 'table' AND name = 'conversations'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|error| open_error(Box::new(error)))?;
+
+        if !has_table {
+            return Err(open_error("this file is not a chatterg notebook".into()));
+        }
+
+        Ok(Self { connection: Arc::new(Mutex::new(connection)), _lock: None })
     }
 
     pub fn memory() -> Result<Self, StorageError> {

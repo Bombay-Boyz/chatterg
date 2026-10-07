@@ -454,3 +454,258 @@ mod m1 {
             .stderr(predicate::str::contains("another chatterg is already using"));
     }
 }
+
+// ---- chatterg report ----------------------------------------------------------------
+
+mod report_command {
+    use super::{chatterg, json, predicate};
+    use mockito::{Server, ServerGuard};
+    use std::path::{Path, PathBuf};
+
+    /// Runs a small questionnaire against a mock agent and leaves a notebook behind.
+    async fn finished_run(dir: &Path, questions: &str) -> (PathBuf, PathBuf) {
+        let mut server: ServerGuard = Server::new_async().await;
+        let rpc_url = format!("{}/rpc", server.url());
+
+        let _card = server
+            .mock("GET", "/.well-known/agent-card.json")
+            .with_status(200)
+            .with_body(
+                json!({"name": "Mock Agent", "supportedInterfaces": [
+                    {"url": rpc_url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
+                ]})
+                .to_string(),
+            )
+            .create_async()
+            .await;
+        let _rpc = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(
+                json!({"jsonrpc": "2.0", "id": 1, "result": {"message": {"parts": [
+                    {"kind": "text", "text": "<b>Crystalline</b> & porous"}]}}})
+                .to_string(),
+            )
+            .create_async()
+            .await;
+
+        let questions_path = dir.join("q.txt");
+        std::fs::write(&questions_path, questions).unwrap();
+        let store = dir.join("c.db");
+
+        chatterg()
+            .arg(server.url())
+            .arg(&questions_path)
+            .args(["--cooldown", "0", "--store"])
+            .arg(&store)
+            .assert()
+            .success();
+
+        (questions_path, store)
+    }
+
+    #[test]
+    fn help_lists_the_report_command() {
+        chatterg()
+            .arg("--help")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("report"))
+            .stdout(predicate::str::contains("<AGENT_URL>"));
+
+        chatterg()
+            .args(["report", "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("--format"))
+            .stdout(predicate::str::contains("--overwrite"))
+            .stdout(predicate::str::contains("--questions"));
+    }
+
+    #[test]
+    fn the_normal_run_form_still_needs_both_arguments() {
+        chatterg()
+            .arg("http://localhost:1")
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("QUESTIONS_FILE"));
+    }
+
+    #[tokio::test]
+    async fn markdown_goes_to_the_screen_by_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, store) = finished_run(dir.path(), "What is a zeolite?\n").await;
+
+        chatterg()
+            .args(["report", "--store"])
+            .arg(&store)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("# Questionnaire report"))
+            .stdout(predicate::str::contains("Mock Agent"))
+            .stdout(predicate::str::contains("> <b>Crystalline</b> & porous"));
+    }
+
+    #[tokio::test]
+    async fn the_format_follows_the_output_file_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, store) = finished_run(dir.path(), "What is a zeolite?\n").await;
+        let out = dir.path().join("report.html");
+
+        chatterg()
+            .args(["report", "--store"])
+            .arg(&store)
+            .arg("--out")
+            .arg(&out)
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("wrote"));
+
+        let html = std::fs::read_to_string(&out).unwrap();
+        assert!(html.starts_with("<!doctype html>"));
+        assert!(html.contains("&lt;b&gt;Crystalline&lt;/b&gt; &amp; porous"));
+        assert!(!html.contains("<b>Crystalline</b>"));
+    }
+
+    #[tokio::test]
+    async fn csv_and_json_can_be_chosen_explicitly() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, store) = finished_run(dir.path(), "What is a zeolite?\n").await;
+
+        chatterg()
+            .args(["report", "--format", "csv", "--store"])
+            .arg(&store)
+            .assert()
+            .success()
+            .stdout(predicate::str::starts_with("id,section,question,answer,status"));
+
+        let output = chatterg()
+            .args(["report", "--format", "json", "--store"])
+            .arg(&store)
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+        assert_eq!(value["summary"]["answered"], 1);
+    }
+
+    #[tokio::test]
+    async fn an_existing_output_file_is_not_replaced_without_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, store) = finished_run(dir.path(), "What is a zeolite?\n").await;
+        let out = dir.path().join("report.md");
+        std::fs::write(&out, "precious").unwrap();
+
+        chatterg()
+            .args(["report", "--store"])
+            .arg(&store)
+            .arg("--out")
+            .arg(&out)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("already exists"));
+        assert_eq!(std::fs::read_to_string(&out).unwrap(), "precious");
+
+        chatterg()
+            .args(["report", "--overwrite", "--store"])
+            .arg(&store)
+            .arg("--out")
+            .arg(&out)
+            .assert()
+            .success();
+        assert!(std::fs::read_to_string(&out).unwrap().contains("# Questionnaire report"));
+    }
+
+    #[test]
+    fn overwrite_without_out_is_a_usage_error() {
+        chatterg()
+            .args(["report", "--overwrite"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("--out"));
+    }
+
+    #[tokio::test]
+    async fn the_questions_file_adds_sections() {
+        let dir = tempfile::tempdir().unwrap();
+        let (questions, store) = finished_run(
+            dir.path(),
+            "## Basics\nWhat is a zeolite?\n## Nxtbrane\nWhat is Nxtbrane?\n",
+        )
+        .await;
+
+        chatterg()
+            .args(["report", "--store"])
+            .arg(&store)
+            .arg("--questions")
+            .arg(&questions)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("### Basics"))
+            .stdout(predicate::str::contains("### Nxtbrane"));
+    }
+
+    #[tokio::test]
+    async fn a_different_questions_file_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, store) = finished_run(dir.path(), "What is a zeolite?\n").await;
+
+        let other = dir.path().join("other.txt");
+        std::fs::write(&other, "Something else entirely?\n").unwrap();
+
+        chatterg()
+            .args(["report", "--store"])
+            .arg(&store)
+            .arg("--questions")
+            .arg(&other)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("does not match the one this run used"));
+    }
+
+    #[test]
+    fn a_missing_notebook_is_a_clear_error_and_creates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("nope.db");
+
+        chatterg()
+            .args(["report", "--store"])
+            .arg(&store)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("no such notebook"));
+
+        assert!(!store.exists());
+    }
+
+    #[tokio::test]
+    async fn a_report_can_be_made_while_another_chatterg_holds_the_notebook() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, store) = finished_run(dir.path(), "What is a zeolite?\n").await;
+
+        let _running = chatterg::storage::sqlite::SqliteStore::open(&store).unwrap();
+
+        chatterg()
+            .args(["report", "--store"])
+            .arg(&store)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("# Questionnaire report"));
+    }
+
+    #[test]
+    fn an_empty_notebook_has_nothing_to_report() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("c.db");
+        drop(chatterg::storage::sqlite::SqliteStore::open(&store).unwrap());
+
+        chatterg()
+            .args(["report", "--store"])
+            .arg(&store)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("does not contain a run yet"));
+    }
+}

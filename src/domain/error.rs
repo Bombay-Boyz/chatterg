@@ -10,6 +10,12 @@ pub enum DomainError {
     #[error("questionnaire contains duplicate question id: {0}")]
     DuplicateQuestionId(String),
 
+    #[error(
+        "the questions file does not match the one this run used ({summary}); \
+         leave out --questions to report from the notebook alone, or use the original file"
+    )]
+    ReportQuestionsMismatch { summary: String },
+
     #[error("question not found: {0}")]
     QuestionNotFound(String),
 

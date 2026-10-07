@@ -235,3 +235,62 @@ fn archiving_an_empty_store_does_nothing() {
     assert!(!store.archive_and_reset(&backup).unwrap());
     assert!(!backup.exists());
 }
+
+// ---- read-only opening (used by `chatterg report`) ----------------------------------
+
+#[tokio::test]
+async fn read_only_store_reads_while_a_run_holds_the_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("c.db");
+
+    let writer = SqliteStore::open(&path).unwrap();
+    writer.save(&conversation_at(3)).await.unwrap();
+
+    // the writer is still open and still owns the lock
+    let reader = SqliteStore::open_read_only(&path).unwrap();
+
+    assert_eq!(reader.load().await.unwrap().unwrap().position, 3);
+
+    // and it sees later saves too
+    writer.save(&conversation_at(4)).await.unwrap();
+    assert_eq!(reader.load().await.unwrap().unwrap().position, 4);
+}
+
+#[tokio::test]
+async fn read_only_store_cannot_change_anything() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("c.db");
+    drop(SqliteStore::open(&path).unwrap());
+
+    let reader = SqliteStore::open_read_only(&path).unwrap();
+
+    assert!(matches!(reader.save(&conversation_at(1)).await, Err(StorageError::Database(_))));
+    assert!(reader.load().await.unwrap().is_none());
+}
+
+#[test]
+fn read_only_open_never_creates_a_notebook() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("missing.db");
+
+    let result = SqliteStore::open_read_only(&path);
+
+    assert!(matches!(&result, Err(StorageError::Open { .. })));
+    assert!(result.err().unwrap().to_string().contains("no such notebook"));
+    assert!(!path.exists());
+    assert!(!dir.path().join("missing.db.lock").exists(), "no lock file may be created either");
+}
+
+#[test]
+fn read_only_open_rejects_a_database_that_is_not_a_notebook() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("other.db");
+
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection.execute("CREATE TABLE something_else (x INTEGER)", []).unwrap();
+    drop(connection);
+
+    let error = SqliteStore::open_read_only(&path).err().unwrap();
+
+    assert!(error.to_string().contains("not a chatterg notebook"), "{error}");
+}

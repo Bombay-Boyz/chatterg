@@ -43,14 +43,14 @@
 | ID | Item | Value | Effort (days) | Depends on |
 |---|---|---|---|---|
 | **R1** ✅ | Timestamps, latency, schema version | High | 1 | none |
-| **R2** | `report` command (Markdown, HTML, CSV, JSON) | High | 3 to 4 | R1 |
+| **R2** ✅ | `report` command (Markdown, HTML, CSV, JSON) | High | 3 to 4 | R1 |
 | **H1** ✅ | Questions-file fingerprint on resume | High | 0.5 | R1 |
 | **H2** ✅ | Database locking, WAL, busy timeout | High | 0.5 | none |
 | **H3** | Graceful Ctrl-C and run summary | Medium | 1 | none |
 | **H4** ✅ | Exit codes | Medium | 0.5 | none |
 | **B1** | `Retry-After` / `RateLimit-*` support | High | 1 to 1.5 | none |
 | **B2** | Client-side rate limiter and backoff | High | 1 | B1 |
-| **F1** | Sections in the questions file | Medium | 1 | R2 for use |
+| **F1** ✅ | Sections in the questions file | Medium | 1 | R2 for use |
 | **F2** | Run control (`--only`, `--from`, `--limit`, `--dry-run`) | Medium | 1 | none |
 | **C1** | Structured logging (`tracing`), `--verbose`, log file | Medium | 1 | none |
 | **C2** | `status`, `validate`, `probe` commands | Medium | 2.5 | R1 |
@@ -64,6 +64,9 @@
 | **R3** | `compare` two runs | Low | 1.5 | R2, F3 |
 | **F7** | One questionnaire against several agents | Low | 3 | F3 |
 | **I1** ✅ | CI, `cargo audit`, MSRV pin | Medium | 1 | none |
+| **W1** | Simpler way to feed questions (convention folder, `chatterg add`, stdin) | High | 1.5 | D1 helps |
+| **W2** | Completion note and automatic report when a run finishes | High | 1 | R2 |
+| **W3** | Archive, then clear, the questions file after a successful run (opt-in) | Medium | 1 to 1.5 | W2 |
 
 **Core track (R1, R2, H1 to H4, B1, B2, F1, F2, C1, I1): about 12 to 14 days.** Everything in the table: about 30 to 35 days.
 
@@ -92,7 +95,9 @@
 - A v1 database migrates to v2 and resumes correctly.
 - A round trip through JSON preserves every field.
 
-### R2. `report` command
+### R2. `report` command  ✅ *done*
+
+> **As built:** `chatterg report --store <db> [--format md|html|csv|json] [--out FILE] [--overwrite] [--questions FILE]`. The notebook is opened **read-only** (`SqliteStore::open_read_only`): no lock, nothing created, safe during a run. The format is guessed from the `--out` extension. An existing `--out` file is never replaced without `--overwrite`. `--questions` adds sections and lists never-asked questions, and is refused if its fingerprint differs from the run's. Without it the stored snapshot supplies question texts. Reports are built by one pure function (`Report::build`) and rendered by four small renderers, with no clock read, so output is deterministic and golden-tested. Bot output is untrusted: HTML is escaped, Markdown answers stay inside block quotes, CSV cells that start with `= + - @` get a leading apostrophe. HTML is one self-contained file (inline CSS, dark-mode aware, no external requests). Rejected answers carry a deterministic reason (empty reply, which evasive phrase matched, or generic). The summary has counts, retries, cooldowns and average / nearest-rank p95 latency. *Not done:* `compare` (R3), and a `--questions` that tolerates appended questions.
 
 **Problem.** Console output shows only ids and the latest answer. You want something you can hand to a colleague.
 
@@ -286,7 +291,9 @@ Today only a reply that carries a message (`result.message`, a flat task with `s
 
 ## 9. Flexibility: questions and runs
 
-### F1. Sections
+### F1. Sections  ✅ *done*
+
+> **As built:** `## Heading` lines in text files (a bare `##` ends the group; a single `#` is still a comment), a `section:` key on a YAML question, and a YAML `sections: [{name, questions}]` list (mixing top-level `questions:` and `sections:` is an error). The section is stored on `Question` but is **not** part of the fingerprint, so renaming a section never blocks a resume. Used by reports today; `--only "section:..."` arrives with F2.
 
 Plain text: a line starting with `## ` begins a section (`#` stays a comment). YAML: a `section:` key on an entry, or a `sections:` list containing `questions`. Store `section` on each question and surface it in reports and `--only`. **Effort 1 day.**
 
@@ -376,13 +383,64 @@ Run the same questions against a list of agent URLs sequentially (each with its 
 | Milestone | Contents | Effort | Outcome |
 |---|---|---|---|
 | **M1: Trustworthy results** ✅ *done* | R1, H1, H2, H4, I1 | ~3.5 days | Safe resume, no data confusion, CI in place |
-| **M2: Report** | R2, F1 | ~4.5 days | A shareable report grouped by section |
+| **M2: Report** ✅ *done* | R2, F1 | ~4.5 days | A shareable report grouped by section |
 | **M3: Polite and robust** | B1, B2, H3, C1 | ~4.5 days | Respects server limits, clean stop, logs |
 | **M4: Operator comfort** | F2, C2, D1, D2 | ~6 days | Dry-run, status, probe, config, auth |
 | **M5: Depth** | F3, R3, F6, E1 | ~10 days | Multi-run, comparison, stricter checks, richer A2A |
 | **Optional** | F4, F5, F7 | ~6 days | Templating, CSV, multi-agent |
 
-M1 and M2 alone (about 8 days) turn the current tool into something you can run and present with confidence.
+M1 and M2 alone (about 8 days) turn the current tool into something you can run and present with confidence. **Both are done.**
+
+---
+
+## 10a. Workflow improvements (requested by the maintainer)
+
+**Goal.** Drop questions into a file, press one button, get a report, and be ready for the next batch, without thinking about notebooks, flags or file names.
+
+### W1. A simpler way to feed questions
+
+**Today:** write a text file, then give the URL, the file and a notebook name every time.
+
+**Proposal (small steps, each useful alone):**
+- **Convention over configuration.** `chatterg run <url>` with no other arguments reads `./questions.txt`, creates `runs/<date>-<host>/` for the notebook and the reports, and prints where everything went. Everything stays overridable with the existing flags.
+- **`chatterg add "What is X?"`** appends one line to `questions.txt` (creating it if needed, skipping an identical line, never touching the lines already there). Optional `--section "Basics"`.
+- **Standard input.** `-` as the questions file reads from stdin, so `pbpaste | chatterg run <url> -` works with copied text.
+- **Default target** in the config file (D1), so the URL need not be typed.
+- *Later:* an `inbox/` folder where each `*.txt` file is one batch, processed in name order and moved to `done/` when finished.
+
+**Effort:** about 1.5 days, 150 to 220 source lines plus tests.
+
+### W2. Completion note and automatic report
+
+When a run reaches `Complete` (every question processed), chatterg writes the report itself and says so:
+
+```text
+Done: 89 questions, 87 answered, 2 rejected, 3 cooldowns (14 min).
+Report: runs/2026-10-08-nxtbrane/report.md
+```
+
+- `--report FILE` (repeatable; the format comes from the extension) or, with the folder convention from W1, `report.md` and `report.html` by default.
+- Written only for completed runs. Runs that ended early or gave up keep their notebook and can be reported on demand with `chatterg report`.
+- Optional `--on-complete <program>` that is run with the report path as its argument (no shell, so nothing is interpreted), for notifications or uploads.
+- Reuses the R2 renderers, so this is mostly wiring.
+
+**Effort:** about 1 day, 80 to 120 lines plus tests.
+
+### W3. Archive, then clear, the questions file (opt-in)
+
+After a successful run and report, optionally empty `questions.txt` so the next batch can be typed in straight away.
+
+**This deletes the user's input, so the safety rules are part of the design:**
+1. Opt-in only: `--clear-questions`. Never the default.
+2. Only after the run is `Complete` **and** every question was processed **and** the report was written.
+3. **Archive first.** Copy the file to `runs/<name>/questions.txt`, re-read the copy and check its SHA-256 equals the original's. Only then clear.
+4. Never clear a file that changed since the run began (compare its fingerprint and modification time with what the run recorded), so a question typed in during a long run is never lost.
+5. Clear by writing a temporary file and renaming it over the original (atomic). Keep comment lines and section headings only if asked (`--keep-headings`).
+6. If any step fails, leave the original untouched and say exactly what happened.
+
+**Effort:** about 1 to 1.5 days, 120 to 180 lines plus tests.
+
+**Suggested order:** W2 first (cheap now that R2 exists), then W1, then W3.
 
 ---
 

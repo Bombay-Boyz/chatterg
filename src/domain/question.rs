@@ -85,4 +85,9 @@ pub struct Question {
     /// Text to send on retries instead of repeating `question` verbatim.
     #[serde(default)]
     pub followup: Option<String>,
+
+    /// Heading this question is grouped under in reports. Purely presentational:
+    /// changing it never counts as editing the question.
+    #[serde(default)]
+    pub section: Option<String>,
 }

@@ -63,6 +63,10 @@ impl Questionnaire {
     /// - anything else (e.g. `.txt`): one question per line; blank lines and
     ///   `#` comments are ignored, and list markers (`-`, `*`, `1.`) and
     ///   surrounding quotes are stripped.
+    ///
+    /// Questions can be grouped into sections for reports: a `## Heading` line in
+    /// a text file, a `section:` key on a YAML question, or a YAML `sections:` list
+    /// of `{name, questions}`.
     pub fn from_path_with(
         path: impl AsRef<Path>,
         defaults: &QuestionDefaults,
@@ -97,19 +101,36 @@ impl Questionnaire {
         let root: Value = serde_yaml::from_str(data).map_err(parse)?;
 
         let entries = match root {
-            Value::Sequence(entries) => entries,
-            Value::Mapping(mut map) => match map.remove("questions") {
-                Some(Value::Sequence(entries)) => entries,
-                Some(Value::Null) | None => Vec::new(),
-                Some(_) => {
-                    return Err(parse(<serde_yaml::Error as serde::de::Error>::custom(
-                        "`questions` must be a list",
-                    )));
+            Value::Sequence(entries) => entries.into_iter().map(|entry| (None, entry)).collect(),
+            Value::Mapping(mut map) => {
+                let questions = map.remove("questions");
+                let sections = map.remove("sections");
+
+                match (questions, sections) {
+                    (Some(_), Some(_)) => {
+                        return Err(parse(yaml_error(
+                            "use either `questions:` or `sections:`, not both",
+                        )));
+                    }
+                    (Some(Value::Sequence(entries)), None) => {
+                        entries.into_iter().map(|entry| (None, entry)).collect()
+                    }
+                    (Some(Value::Null) | None, None) => Vec::new(),
+                    (Some(_), None) => {
+                        return Err(parse(yaml_error("`questions` must be a list")));
+                    }
+                    (None, Some(Value::Sequence(sections))) => {
+                        flatten_sections(sections).map_err(parse)?
+                    }
+                    (None, Some(Value::Null)) => Vec::new(),
+                    (None, Some(_)) => {
+                        return Err(parse(yaml_error("`sections` must be a list")));
+                    }
                 }
-            },
+            }
             Value::Null => Vec::new(),
             _ => {
-                return Err(parse(<serde_yaml::Error as serde::de::Error>::custom(
+                return Err(parse(yaml_error(
                     "expected a list of questions or a `questions:` list",
                 )));
             }
@@ -118,14 +139,29 @@ impl Questionnaire {
         let width = id_width(entries.len());
         let mut questions = Vec::with_capacity(entries.len());
 
-        for (index, entry) in entries.into_iter().enumerate() {
+        for (index, (section, entry)) in entries.into_iter().enumerate() {
             let number = index + 1;
 
             let question = match entry {
-                Value::String(text) => plain_question(number, width, text.trim(), defaults),
-                other => serde_yaml::from_value::<Question>(other).map_err(|source| {
-                    DomainError::InvalidQuestion { path: path.to_owned(), index: number, source }
-                })?,
+                Value::String(text) => {
+                    plain_question(number, width, text.trim(), section.as_deref(), defaults)
+                }
+                other => {
+                    let mut question =
+                        serde_yaml::from_value::<Question>(other).map_err(|source| {
+                            DomainError::InvalidQuestion {
+                                path: path.to_owned(),
+                                index: number,
+                                source,
+                            }
+                        })?;
+
+                    if question.section.is_none() {
+                        question.section = section;
+                    }
+
+                    question
+                }
             };
 
             questions.push(question);
@@ -135,14 +171,26 @@ impl Questionnaire {
     }
 
     fn from_lines(data: &str, defaults: &QuestionDefaults) -> Self {
-        let lines: Vec<String> = data.lines().filter_map(clean_line).collect();
-        let width = id_width(lines.len());
+        let mut section: Option<String> = None;
+        let mut entries: Vec<(Option<String>, String)> = Vec::new();
+
+        for line in data.lines() {
+            match parse_line(line) {
+                Line::Skip => {}
+                Line::Section(name) => section = name,
+                Line::Question(text) => entries.push((section.clone(), text)),
+            }
+        }
+
+        let width = id_width(entries.len());
 
         Self {
-            questions: lines
+            questions: entries
                 .iter()
                 .enumerate()
-                .map(|(index, text)| plain_question(index + 1, width, text, defaults))
+                .map(|(index, (section, text))| {
+                    plain_question(index + 1, width, text, section.as_deref(), defaults)
+                })
                 .collect(),
         }
     }
@@ -199,6 +247,7 @@ fn plain_question(
     number: usize,
     width: usize,
     text: &str,
+    section: Option<&str>,
     defaults: &QuestionDefaults,
 ) -> Question {
     Question {
@@ -211,6 +260,73 @@ fn plain_question(
         on_failure: defaults.on_failure.clone(),
         reject_if_contains: defaults.reject_if_contains.clone(),
         followup: Some(format!("{FOLLOWUP_PREFIX}{text}")),
+        section: section.map(str::to_owned),
+    }
+}
+
+fn yaml_error(message: &str) -> serde_yaml::Error {
+    <serde_yaml::Error as serde::de::Error>::custom(message)
+}
+
+/// `sections: [{name, questions: [...]}]` -> one flat list remembering each section.
+fn flatten_sections(
+    sections: Vec<Value>,
+) -> Result<Vec<(Option<String>, Value)>, serde_yaml::Error> {
+    let mut flat = Vec::new();
+
+    for (index, section) in sections.into_iter().enumerate() {
+        let Value::Mapping(mut map) = section else {
+            return Err(yaml_error(&format!(
+                "section #{} must have a `name` and `questions`",
+                index + 1
+            )));
+        };
+
+        let name = match map.remove("name") {
+            Some(Value::String(name)) if !name.trim().is_empty() => name.trim().to_owned(),
+            _ => {
+                return Err(yaml_error(&format!(
+                    "section #{} needs a non-empty `name`",
+                    index + 1
+                )));
+            }
+        };
+
+        match map.remove("questions") {
+            Some(Value::Sequence(entries)) => {
+                flat.extend(entries.into_iter().map(|entry| (Some(name.clone()), entry)));
+            }
+            Some(Value::Null) | None => {}
+            Some(_) => {
+                return Err(yaml_error(&format!(
+                    "`questions` in section \"{name}\" must be a list"
+                )));
+            }
+        }
+    }
+
+    Ok(flat)
+}
+
+/// What one line of a text questions file means.
+enum Line {
+    Skip,
+    /// `## Heading` starts a section; a bare `##` ends it.
+    Section(Option<String>),
+    Question(String),
+}
+
+fn parse_line(line: &str) -> Line {
+    let trimmed = line.trim();
+
+    if trimmed.starts_with("##") {
+        let name = trimmed.trim_start_matches('#').trim();
+        return Line::Section((!name.is_empty()).then(|| name.to_owned()));
+    }
+
+    match clean_line(trimmed) {
+        Some(text) => Line::Question(text),
+        None => Line::Skip,
     }
 }
 

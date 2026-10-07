@@ -172,3 +172,124 @@ fn hundred_questions_get_unique_ids() {
     assert_eq!(questions.len(), 100);
     assert_eq!(questions[99].id.as_str(), "q100");
 }
+
+// ---- sections ------------------------------------------------------------------
+
+fn sections_of(questionnaire: &Questionnaire) -> Vec<Option<&str>> {
+    questionnaire.questions.iter().map(|q| q.section.as_deref()).collect()
+}
+
+#[test]
+fn text_file_headings_start_sections() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write(
+        &dir,
+        "q.txt",
+        "# a normal comment\nBefore any heading?\n\n## Basics\nOne?\nTwo?\n\n##   Nxtbrane  \nThree?\n\n##\nAfter the sections?\n",
+    );
+
+    let questionnaire = Questionnaire::from_path(&path).unwrap();
+
+    assert_eq!(
+        sections_of(&questionnaire),
+        [None, Some("Basics"), Some("Basics"), Some("Nxtbrane"), None]
+    );
+    // ids keep counting straight through headings
+    assert_eq!(questionnaire.questions[4].id.as_str(), "q005");
+}
+
+#[test]
+fn a_single_hash_is_still_just_a_comment() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write(&dir, "q.txt", "# Basics\nOne?\n");
+
+    let questionnaire = Questionnaire::from_path(&path).unwrap();
+
+    assert_eq!(questionnaire.questions.len(), 1);
+    assert_eq!(sections_of(&questionnaire), [None]);
+}
+
+#[test]
+fn a_file_with_only_headings_is_empty() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write(&dir, "q.txt", "## Basics\n## More\n");
+
+    assert!(matches!(Questionnaire::from_path(&path), Err(DomainError::EmptyQuestionnaire)));
+}
+
+#[test]
+fn yaml_questions_can_name_their_section() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write(
+        &dir,
+        "q.yaml",
+        "questions:\n  - {id: a, question: A?, required: true, type: text, section: Basics}\n  - \"Plain?\"\n",
+    );
+
+    let questionnaire = Questionnaire::from_path(&path).unwrap();
+
+    assert_eq!(sections_of(&questionnaire), [Some("Basics"), None]);
+}
+
+#[test]
+fn yaml_sections_list_groups_bare_strings_and_full_questions() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write(
+        &dir,
+        "q.yaml",
+        "sections:\n  - name: Basics\n    questions:\n      - \"One?\"\n      - {id: size, question: How many?, required: true, type: integer}\n      - {id: own, question: Own?, required: true, type: text, section: Override}\n  - name: Nxtbrane\n    questions:\n      - \"Two?\"\n",
+    );
+
+    let questionnaire = Questionnaire::from_path(&path).unwrap();
+
+    assert_eq!(
+        sections_of(&questionnaire),
+        [Some("Basics"), Some("Basics"), Some("Override"), Some("Nxtbrane")]
+    );
+    assert_eq!(questionnaire.questions[0].id.as_str(), "q001");
+    assert_eq!(questionnaire.questions[1].id.as_str(), "size");
+    assert_eq!(questionnaire.questions[3].id.as_str(), "q004");
+}
+
+#[test]
+fn questions_and_sections_cannot_be_mixed_at_the_top_level() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write(
+        &dir,
+        "q.yaml",
+        "questions: [\"A?\"]\nsections:\n  - {name: S, questions: [\"B?\"]}\n",
+    );
+
+    let error = Questionnaire::from_path(&path).unwrap_err();
+
+    assert!(matches!(error, DomainError::QuestionnaireParse { .. }));
+    assert!(error.to_string().contains("either `questions:` or `sections:`"), "{error}");
+}
+
+#[test]
+fn a_section_needs_a_name_and_a_question_list() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let nameless = write(&dir, "a.yaml", "sections:\n  - questions: [\"A?\"]\n");
+    let error = Questionnaire::from_path(&nameless).unwrap_err();
+    assert!(error.to_string().contains("section #1 needs a non-empty `name`"), "{error}");
+
+    let not_a_list = write(&dir, "b.yaml", "sections:\n  - {name: S, questions: nope}\n");
+    let error = Questionnaire::from_path(&not_a_list).unwrap_err();
+    assert!(error.to_string().contains("must be a list"), "{error}");
+
+    let not_a_map = write(&dir, "c.yaml", "sections:\n  - just text\n");
+    assert!(Questionnaire::from_path(&not_a_map).is_err());
+}
+
+#[test]
+fn an_empty_section_is_allowed_as_long_as_some_question_exists() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write(
+        &dir,
+        "q.yaml",
+        "sections:\n  - {name: Empty}\n  - {name: Full, questions: [\"A?\"]}\n",
+    );
+
+    assert_eq!(Questionnaire::from_path(&path).unwrap().questions.len(), 1);
+}

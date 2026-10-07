@@ -82,6 +82,16 @@ Rules (very easy):
 - Empty lines are fine. chatterg skips them.
 - Lines starting with `#` are comments. chatterg skips them.
 - Things like `- `, `* ` or `1. ` at the start of a line, and quote marks around the question, are removed for you.
+- A line starting with `##` is a **heading**. It starts a new group (a "section") for the questions below it. The report uses these as chapter titles. A line with just `##` ends the group.
+
+```text
+## Zeolite basics
+What is a zeolite?
+What is a membrane?
+
+## Nxtbrane
+What is Nxtbrane?
+```
 
 chatterg gives each question a name: `q001`, `q002`, `q003`... (that's how you'll find them in the answers).
 
@@ -136,7 +146,7 @@ The progress messages go to one place (stderr) and the answers go to another (st
 ./target/release/chatterg  https://the-bots-address.example/agent  my_questions.txt  > answers.txt
 ```
 
-> 🔎 The answers are only printed when chatterg is **finished**. If you stop it early, use the notebook trick in the section "Reading the notebook" below.
+> 🔎 The answers are only printed when chatterg is **finished**. If you stop it early, make a report from the notebook. See "Making a report" below.
 
 ---
 
@@ -371,9 +381,52 @@ questions:
 
 ---
 
-## Reading the notebook (getting answers out of `chatterg.db`)
+## Making a report 📄
 
-You can look inside the notebook any time, even when chatterg is stopped. This needs Python 3 (nothing to install):
+chatterg can turn the notebook into a tidy document, even while a run is still going (it only **reads** the notebook, so it never gets in the way):
+
+```bash
+# Print a Markdown report on the screen
+./target/release/chatterg report --store chatterg.db
+
+# Save it as a web page (the format is guessed from the file name: .md .html .csv .json)
+./target/release/chatterg report --store chatterg.db --out report.html
+
+# Spreadsheet or program friendly
+./target/release/chatterg report --store chatterg.db --out answers.csv
+./target/release/chatterg report --store chatterg.db --format json
+```
+
+| Switch | What it does |
+|---|---|
+| `--store <FILE>` | **Which notebook to read** (normal: `chatterg.db`). |
+| `--format md\|html\|csv\|json` | **What kind of document.** If you leave it out, chatterg looks at the ending of `--out` (`.html`, `.csv`, ...). Otherwise it uses Markdown. |
+| `--out <FILE>` | **Save to a file** instead of printing. chatterg will **not** replace a file that already exists. |
+| `--overwrite` | **Allow replacing** the `--out` file. |
+| `--questions <FILE>` | **The questions file you used.** Adds the section headings and lists questions that were never asked. It must be the same questions as the run used, or chatterg refuses. |
+
+What's inside a report:
+
+1. **The facts:** which bot, when it started and finished, how long it took.
+2. **A summary:** how many questions, answered, rejected, not asked, retries, naps, and how fast the bot replied.
+3. **All answers**, grouped by section.
+4. **Needs attention:** every question that was rejected or never asked, with the reason (for example `contains the evasive phrase "meeting"`).
+5. **The nap log:** every time chatterg had to wait, and why.
+6. **A full transcript** of every attempt, with times.
+
+Safety notes:
+
+- Everything the bot said is treated as **untrusted text**. In the HTML report it is escaped, so a bot can't put code in your page. In the CSV report, cells that start with `=`, `+`, `-` or `@` get a `'` in front so a spreadsheet will not run them as formulas.
+- The HTML report is **one file** with no outside links. You can email it or open it offline.
+- The same notebook always gives the same report. No clock is read.
+
+---
+
+## Reading the notebook yourself (getting answers out of `chatterg.db`)
+
+The report above is the easy way. If you want to look inside by hand, you can, any time, even when chatterg is stopped.
+
+This needs Python 3 (nothing to install):
 
 ```bash
 python3 - chatterg.db <<'EOF'
@@ -428,6 +481,10 @@ chatterg tells you what happened on the screen, starting with `error:`. Here is 
 
 | What you see | What it means | What to do |
 |---|---|---|
+| `no such notebook` (from `report`) | The `--store` file isn't there. `report` never creates one | Check the notebook name |
+| `the notebook <file> does not contain a run yet` | The notebook exists but chatterg never asked anything | Run chatterg first |
+| `<file> already exists; choose another name or add --overwrite` | `report --out` would replace a file | Pick a new name, or add `--overwrite` |
+| `the questions file does not match the one this run used` | `report --questions` was given different questions | Use the original file, or leave `--questions` out |
 | `cannot read questionnaire <file>` | The questions file isn't where you said | Check the file name and folder |
 | `invalid questionnaire <file>` | A `.yaml` file has a spelling or spacing mistake | Check the YAML (spaces matter!) |
 | `invalid question #N in <file>` | Question card number N is missing a field or has a wrong value | Look at that card |
@@ -483,7 +540,7 @@ chatterg/
 │   ├── domain/                the rules: questions, answers, checking answers
 │   ├── storage/               the notebook (SQLite): saving, locking, upgrading old notebooks
 │   ├── transport/             how to talk to bots (A2A) + a pretend bot for tests
-│   └── output/                how the answers are printed
+│   └── output/                how answers are shown: on screen (human) and reports (report.rs)
 └── tests/                     the checks that prove it works
 ```
 
@@ -495,7 +552,7 @@ chatterg/
 - Each question is sent on its own. The bot is not told about the earlier questions.
 - One notebook holds **one** conversation.
 - It only talks to A2A bots for now.
-- It doesn't make fancy reports yet. Use the "Reading the notebook" script above.
+- It doesn't write the report **by itself** when a run finishes yet. You ask for it with `chatterg report` (automatic reports are planned).
 
 Want to know what we plan to build next (reports, safer resume, smarter waiting, talking to more kinds of bots)? Read **[ROADMAP.md](ROADMAP.md)**.
 
@@ -526,6 +583,10 @@ echo $?
 
 # Start over: use a new notebook
 ./target/release/chatterg  <BOT_URL>  <QUESTIONS_FILE>  --store new_run.db
+
+# Make a report (Markdown on screen, or a file in the format of its ending)
+./target/release/chatterg  report  --store chatterg.db
+./target/release/chatterg  report  --store chatterg.db  --out report.html
 
 # Save the answers to a file
 ./target/release/chatterg  <BOT_URL>  <QUESTIONS_FILE>  > answers.txt
