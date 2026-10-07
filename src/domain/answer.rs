@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::question::QuestionId;
+use super::{question::QuestionId, run::Timestamp};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Attempt {
@@ -8,6 +8,14 @@ pub struct Attempt {
     pub request: String,
     pub response: String,
     pub validation: ValidationStatus,
+
+    /// When the request that produced this response was sent / the reply arrived.
+    #[serde(default)]
+    pub sent_at: Option<Timestamp>,
+    #[serde(default)]
+    pub received_at: Option<Timestamp>,
+    #[serde(default)]
+    pub latency_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

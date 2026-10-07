@@ -31,6 +31,18 @@ pub enum AnswerType {
     Enum,
 }
 
+impl AnswerType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::String => "string",
+            Self::Text => "text",
+            Self::Integer => "integer",
+            Self::List => "list",
+            Self::Enum => "enum",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum FailurePolicy {
     #[default]

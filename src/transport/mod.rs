@@ -6,6 +6,9 @@ use url::Url;
 pub struct Capabilities {
     pub protocols: Vec<Protocol>,
     pub endpoint: Url,
+
+    /// The agent's own name for itself, when it publishes one.
+    pub agent_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,6 +16,16 @@ pub enum Protocol {
     A2a,
     Http,
     JsonRpc,
+}
+
+impl Protocol {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::A2a => "a2a",
+            Self::Http => "http",
+            Self::JsonRpc => "jsonrpc",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -31,7 +31,11 @@ impl Transport for HttpTransport {
             .map_err(|_| TransportError::Unreachable)?;
 
         if response.status().is_success() {
-            Ok(Capabilities { protocols: vec![Protocol::Http], endpoint: target.clone() })
+            Ok(Capabilities {
+                protocols: vec![Protocol::Http],
+                endpoint: target.clone(),
+                agent_name: None,
+            })
         } else {
             Err(TransportError::Unreachable)
         }

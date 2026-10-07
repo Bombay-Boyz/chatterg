@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test (${{ matrix.toolchain }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 1.88 is the minimum supported Rust version (see `rust-version` in Cargo.toml)
+        toolchain: [stable, "1.88"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt -- --check
+      - name: Lints
+        run: cargo clippy --all-targets --all-features --locked -- -D warnings
+      - name: Tests
+        run: cargo test --all-targets --all-features --locked

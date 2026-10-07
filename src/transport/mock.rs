@@ -28,7 +28,11 @@ impl MockTransport {
 #[async_trait]
 impl Transport for MockTransport {
     async fn discover(&self, target: &Url) -> Result<Capabilities, TransportError> {
-        Ok(Capabilities { protocols: vec![Protocol::Http], endpoint: target.clone() })
+        Ok(Capabilities {
+            protocols: vec![Protocol::Http],
+            endpoint: target.clone(),
+            agent_name: None,
+        })
     }
 
     async fn send(&self, _target: &Url, message: Message) -> Result<Response, TransportError> {

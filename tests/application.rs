@@ -87,7 +87,7 @@ async fn interrupted_run_resumes_and_matches_uninterrupted_run() {
 
     let resumed = last.unwrap();
 
-    assert_eq!(resumed.conversation(), reference.conversation());
+    assert_eq!(resumed.conversation().without_timing(), reference.conversation().without_timing());
     assert_eq!(ids, ["chatterg-1", "chatterg-2", "chatterg-3", "chatterg-4", "chatterg-5"]);
 
     // No question repeated.
@@ -96,7 +96,7 @@ async fn interrupted_run_resumes_and_matches_uninterrupted_run() {
     assert_eq!(unique, asked);
 
     let stored = SqliteStore::open(&path).unwrap().load().await.unwrap().unwrap();
-    assert_eq!(stored, *reference.conversation());
+    assert_eq!(stored.without_timing(), reference.conversation().without_timing());
 }
 
 #[tokio::test]
@@ -263,7 +263,11 @@ mod cooldown {
     #[async_trait]
     impl Transport for Scripted {
         async fn discover(&self, target: &Url) -> Result<Capabilities, TransportError> {
-            Ok(Capabilities { protocols: vec![Protocol::A2a], endpoint: target.clone() })
+            Ok(Capabilities {
+                protocols: vec![Protocol::A2a],
+                endpoint: target.clone(),
+                agent_name: None,
+            })
         }
 
         async fn send(&self, _: &Url, message: Message) -> Result<Response, TransportError> {
@@ -455,5 +459,194 @@ mod cooldown {
 
         let events = events.lock().unwrap();
         assert!(matches!(&events[0], Progress::Asking { number: 1, total: 1, attempt: 1, .. }));
+    }
+}
+
+// ---- timestamps and the cooldown log ---------------------------------------
+
+mod run_record {
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicI64, Ordering},
+        },
+        time::Duration,
+    };
+
+    use chatterg::{
+        application::{ApplicationError, Clock, RunOptions, run_with},
+        domain::Questionnaire,
+        storage::{Store, sqlite::SqliteStore},
+        transport::{TransportError, mock::MockTransport},
+    };
+    use chrono::{TimeZone, Utc};
+
+    fn two() -> Questionnaire {
+        serde_yaml::from_str(
+            "questions:\n  - {id: a, question: \"A?\", required: true, type: text}\n  - {id: b, question: \"B?\", required: true, type: text}\n",
+        )
+        .unwrap()
+    }
+
+    /// A clock that advances exactly one second every time it is read.
+    fn ticking_clock() -> Clock {
+        let ticks = Arc::new(AtomicI64::new(0));
+
+        Arc::new(move || {
+            Utc.timestamp_opt(1_800_000_000 + ticks.fetch_add(1, Ordering::SeqCst), 0).unwrap()
+        })
+    }
+
+    #[tokio::test]
+    async fn every_attempt_is_timed_and_the_run_is_stamped() {
+        let options = RunOptions { clock: ticking_clock(), ..RunOptions::default() };
+        let store = Arc::new(SqliteStore::memory().unwrap());
+
+        let engine = run_with(
+            two(),
+            "http://mock.local",
+            &MockTransport::new(["A1", "B1"]),
+            Arc::clone(&store),
+            &options,
+        )
+        .await
+        .unwrap();
+
+        let conversation = engine.conversation();
+
+        for record in &conversation.answers {
+            let attempt = &record.attempts[0];
+            assert_eq!(attempt.latency_ms, Some(1000));
+            assert!(attempt.received_at > attempt.sent_at);
+        }
+
+        let started = conversation.started_at.unwrap();
+        let finished = conversation.finished_at.unwrap();
+        assert!(started <= conversation.answers[0].attempts[0].sent_at.unwrap());
+        assert!(finished >= conversation.answers[1].attempts[0].received_at.unwrap());
+
+        let agent = conversation.agent.as_ref().unwrap();
+        assert_eq!(agent.target, "http://mock.local/");
+        assert_eq!(agent.protocol, "http");
+
+        // and it is all persisted
+        assert_eq!(&store.load().await.unwrap().unwrap(), conversation);
+    }
+
+    #[tokio::test]
+    async fn resuming_keeps_the_original_start_time() {
+        let store = Arc::new(SqliteStore::memory().unwrap());
+
+        // first run dies when asking `b`
+        run_with(
+            two(),
+            "http://mock.local",
+            &MockTransport::new(["A1"]),
+            Arc::clone(&store),
+            &RunOptions { clock: ticking_clock(), ..RunOptions::default() },
+        )
+        .await
+        .unwrap_err();
+        let started = store.load().await.unwrap().unwrap().started_at.unwrap();
+
+        // second run uses a clock that is far in the future
+        let later: Clock = Arc::new(|| Utc.timestamp_opt(1_900_000_000, 0).unwrap());
+        let engine = run_with(
+            two(),
+            "http://mock.local",
+            &MockTransport::new(["B1"]),
+            Arc::clone(&store),
+            &RunOptions { clock: later, ..RunOptions::default() },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(engine.conversation().started_at, Some(started));
+        assert_eq!(engine.conversation().finished_at.unwrap().timestamp(), 1_900_000_000);
+    }
+
+    #[tokio::test]
+    async fn the_cooldown_log_records_why_and_how_long() {
+        let options = RunOptions {
+            cooldown: Duration::from_secs(0),
+            clock: ticking_clock(),
+            ..RunOptions::default()
+        };
+        let store = Arc::new(SqliteStore::memory().unwrap());
+
+        let transport = chatterg_scripted([
+            Err(TransportError::Http { status: 429 }),
+            Err(TransportError::Http { status: 503 }),
+            Ok("A1"),
+            Ok("B1"),
+        ]);
+
+        let engine =
+            run_with(two(), "http://mock.local", &transport, store, &options).await.unwrap();
+
+        let log = &engine.conversation().cooldowns;
+        assert_eq!(log.len(), 2);
+        assert!(log[0].reason.contains("429"), "{}", log[0].reason);
+        assert!(log[1].reason.contains("503"), "{}", log[1].reason);
+        assert!(log[0].at < log[1].at);
+    }
+
+    #[tokio::test]
+    async fn giving_up_still_saves_the_cooldown_log() {
+        let options =
+            RunOptions { cooldown: Duration::from_secs(0), max_waits: 2, ..RunOptions::default() };
+        let store = Arc::new(SqliteStore::memory().unwrap());
+
+        let transport = chatterg_scripted([
+            Err(TransportError::Http { status: 429 }),
+            Err(TransportError::Http { status: 429 }),
+            Err(TransportError::Http { status: 429 }),
+        ]);
+
+        let error = run_with(two(), "http://mock.local", &transport, Arc::clone(&store), &options)
+            .await
+            .err()
+            .unwrap();
+        assert!(matches!(error, ApplicationError::AgentUnavailable { waits: 2, .. }));
+
+        let saved = store.load().await.unwrap().expect("progress must be saved on give-up");
+        assert_eq!(saved.cooldowns.len(), 2);
+        assert_eq!(saved.finished_at, None, "a run that gave up is not finished");
+    }
+
+    // A tiny scripted transport (the one in `mod cooldown` is private to that module).
+    fn chatterg_scripted(
+        script: impl IntoIterator<Item = Result<&'static str, TransportError>>,
+    ) -> Scripted {
+        Scripted(std::sync::Mutex::new(script.into_iter().map(|r| r.map(str::to_owned)).collect()))
+    }
+
+    struct Scripted(std::sync::Mutex<std::collections::VecDeque<Result<String, TransportError>>>);
+
+    #[async_trait::async_trait]
+    impl chatterg::transport::Transport for Scripted {
+        async fn discover(
+            &self,
+            target: &url::Url,
+        ) -> Result<chatterg::transport::Capabilities, TransportError> {
+            Ok(chatterg::transport::Capabilities {
+                protocols: vec![chatterg::transport::Protocol::Http],
+                endpoint: target.clone(),
+                agent_name: Some("Scripted".into()),
+            })
+        }
+
+        async fn send(
+            &self,
+            _: &url::Url,
+            _: chatterg::transport::Message,
+        ) -> Result<chatterg::transport::Response, TransportError> {
+            self.0
+                .lock()
+                .unwrap()
+                .pop_front()
+                .expect("script exhausted")
+                .map(|text| chatterg::transport::Response { text })
+        }
     }
 }

@@ -147,6 +147,10 @@ chatterg writes everything into a small file called **`chatterg.db`** in the fol
 - ✅ After every answer, chatterg writes it down.
 - ✅ If your computer goes to sleep, or you press **Ctrl+C**, nothing is lost.
 - ✅ Run **the exact same command again** and chatterg picks up where it stopped. It does not ask the same questions twice.
+- 🕒 It also writes down **when** each question was asked, **how long** the bot took, and every time it had to take a nap.
+- 🔒 The notebook is **locked** while chatterg is using it. If you start a second chatterg on the same notebook, it politely refuses instead of messing up the first one.
+- 📎 You may see extra files next to the notebook (`chatterg.db-wal`, `chatterg.db-shm`, `chatterg.db.lock`). They are normal helpers. Don't delete them while chatterg is running.
+- 🔄 Older notebooks (made before times were saved) are upgraded automatically when you open them.
 
 Want a different notebook? Use `--store`:
 
@@ -156,7 +160,7 @@ Want a different notebook? Use `--store`:
 
 **Important:** one notebook = one conversation.
 
-- Want to start over? Use a new notebook name, or delete the old `.db` file.
+- Want to start over? Use `--restart` (it keeps a backup of the old run), use a new notebook name, or delete the old `.db` file.
 - Using the same notebook after the run is **finished** just prints the old answers again. It does not ask anything.
 - If a run was **stopped on purpose** (see `on_failure: abort` below), it stays stopped. Use a new notebook to try again.
 
@@ -173,6 +177,8 @@ chatterg <AGENT_URL> <QUESTIONS_FILE> [switches]
 | Switch | Normal value | What it does, in simple words |
 |---|---|---|
 | `--store <FILE>` | `chatterg.db` | **Which notebook to use.** Same notebook = carry on where you stopped. |
+| `--force-resume` | off | **Carry on even though you edited the questions file**, as long as every question already asked is unchanged. Edits to later questions, or new questions added at the end, are fine. |
+| `--restart` | off | **Start over.** Copies the old notebook entry into a backup file (`<notebook>.<date-time>.bak`) and begins again at question 1. |
 | `--retries <N>` | `2` | **If the answer is bad, ask again this many extra times.** `2` means up to 3 tries in total. Only for plain questions (see below). |
 | `--reject-phrase <WORDS>` | a built-in list | **Words that mean "the bot is dodging."** If the answer contains one, it counts as a bad answer and chatterg asks again. You can use this switch many times. Using it **replaces** the built-in list. |
 | `--cooldown <SECONDS>` | `120` | **How long to nap** when the bot stops answering (too many questions, error, no reply). 120 seconds = 2 minutes. |
@@ -208,6 +214,35 @@ chatterg <AGENT_URL> <QUESTIONS_FILE> [switches]
 ```bash
 ./target/release/chatterg  https://bot.example/agent  questions.txt  --store zeolite_run.db
 ```
+
+---
+
+## What if I change my questions file halfway? ✏️
+
+chatterg remembers a "fingerprint" of your questions from when the run started. If you edit the file and run again with the same notebook, it **checks** instead of guessing:
+
+| What you changed | What chatterg does |
+|---|---|
+| Nothing (or only retry/dodge-word settings) | Carries on. |
+| Added questions at the end, or reworded questions that were **not asked yet** | Stops and tells you what changed. Add `--force-resume` to carry on with the new list. |
+| Reworded, moved or removed a question that was **already asked** (or is being asked right now) | Refuses, even with `--force-resume`, because the answers would end up next to the wrong questions. Use `--restart` or a new notebook. |
+
+> ⚠️ Plain-text questions are named by their position (`q001`, `q002`, ...). If you insert a line in the **middle**, every question after it gets a new name, so chatterg will see that as a big change. Add new questions at the **end** if you want to keep going.
+
+---
+
+## How chatterg tells you how it went (exit codes) 🚦
+
+When chatterg stops, it leaves a little number behind, so scripts can tell what happened:
+
+| Number | Meaning |
+|---|---|
+| `0` | All questions were processed. (Some answers may still say `Rejected`. Look at the answers.) |
+| `1` | Something went wrong: bad file, bad address, network or storage problem, or the questions file changed. |
+| `2` | The run **ended early on purpose** because a question failed and its `on_failure` was `abort` (or `unknown`). |
+| `3` | **Gave up:** the bot stayed unavailable for `--max-waits` naps in a row. Run the same command later to carry on. |
+
+In a terminal you can see the number with `echo $?` right after chatterg ends.
 
 ---
 
@@ -345,12 +380,14 @@ python3 - chatterg.db <<'EOF'
 import json, sqlite3, sys
 
 c = json.loads(sqlite3.connect(sys.argv[1]).execute("select data from conversations").fetchone()[0])
-print(f"state: {c['state']} | questions finished: {c['position']} | messages sent: {c['messages_sent']}\n")
+print(f"state: {c['state']} | questions finished: {c['position']} | messages sent: {c['messages_sent']}")
+print(f"started: {c.get('started_at')} | finished: {c.get('finished_at')} | naps: {len(c.get('cooldowns', []))}\n")
 
 for record in c["answers"]:
     last = record["attempts"][-1]
     print(f"## {record['question_id']}: {last['request']}")
-    print(f"({last['validation']}, tries: {len(record['attempts'])})")
+    took = f", {last['latency_ms']} ms" if last.get("latency_ms") is not None else ""
+    print(f"({last['validation']}, tries: {len(record['attempts'])}{took})")
     print(last["response"] + "\n")
 EOF
 ```
@@ -402,6 +439,9 @@ chatterg tells you what happened on the screen, starting with `error:`. Here is 
 | `HTTP request failed with status 404` | The address is wrong | Check the URL |
 | `malformed agent card` | The address doesn't point at an A2A bot | Check the URL |
 | `unsupported protocol` | The bot doesn't offer JSON-RPC version 1.0 | chatterg can't talk to this bot (yet) |
+| `another chatterg is already using <file>` | A second chatterg is running on the same notebook | Wait for it to finish, or use a different `--store` |
+| `the questions file changed since this run started` | You edited the questions after starting | Read the message. Use `--force-resume` (safe edits only), `--restart`, or a new notebook |
+| `stored conversation uses format version N` | The notebook was made by a **newer** chatterg | Update chatterg |
 | `agent still unavailable after N cooldowns` | The bot kept saying "slow down" or never answered, and chatterg ran out of naps | Wait, then run the **same** command again. Or use a bigger `--delay`, `--cooldown` or `--max-waits` |
 
 If chatterg ends but some answers say `Rejected`, that is **not** a crash. It means the bot gave answers chatterg didn't like, and chatterg moved on.
@@ -431,15 +471,17 @@ Tests use pretend bots, so they don't need the internet and never bother a real 
 ```
 chatterg/
 ├── Cargo.toml                 the shopping list for Rust
+├── ROADMAP.md                 what we plan to build next
 ├── questions.yaml             a small example questions file
 ├── questions/
 │   └── zeolite_membranes.txt  120 ready-made questions
 ├── scripts/                   helper scripts (gate.sh, test-nxtbrane.sh)
+├── .github/                   automatic checks on GitHub (tests, lints, security audit)
 ├── src/
 │   ├── main.rs                the front door: reads your switches
 │   ├── application.rs         the boss: asks, waits, naps, saves
 │   ├── domain/                the rules: questions, answers, checking answers
-│   ├── storage/               the notebook (SQLite)
+│   ├── storage/               the notebook (SQLite): saving, locking, upgrading old notebooks
 │   ├── transport/             how to talk to bots (A2A) + a pretend bot for tests
 │   └── output/                how the answers are printed
 └── tests/                     the checks that prove it works
@@ -452,9 +494,10 @@ chatterg/
 - It **doesn't understand** answers. It can't tell if an answer is *correct*. It only checks simple things (empty? a number? one of the allowed words? a dodge word?).
 - Each question is sent on its own. The bot is not told about the earlier questions.
 - One notebook holds **one** conversation.
-- Don't change the questions file in the middle of a run. chatterg won't notice, and answers could end up next to the wrong questions. If you change the questions, use a new notebook.
 - It only talks to A2A bots for now.
-- It doesn't make fancy reports. Use the "Reading the notebook" script above.
+- It doesn't make fancy reports yet. Use the "Reading the notebook" script above.
+
+Want to know what we plan to build next (reports, safer resume, smarter waiting, talking to more kinds of bots)? Read **[ROADMAP.md](ROADMAP.md)**.
 
 ---
 
@@ -471,6 +514,15 @@ cargo build --release
 ./target/release/chatterg  <BOT_URL>  <QUESTIONS_FILE>  --delay 30 --cooldown 300
 
 # Stopped halfway? Run the SAME command again. It carries on.
+
+# Edited the questions file halfway (only later questions)? Carry on with the new list
+./target/release/chatterg  <BOT_URL>  <QUESTIONS_FILE>  --force-resume
+
+# Start over but keep a backup of the old run
+./target/release/chatterg  <BOT_URL>  <QUESTIONS_FILE>  --restart
+
+# How did it go? (0 = done, 1 = error, 2 = ended early, 3 = bot unavailable)
+echo $?
 
 # Start over: use a new notebook
 ./target/release/chatterg  <BOT_URL>  <QUESTIONS_FILE>  --store new_run.db

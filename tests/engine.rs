@@ -258,3 +258,74 @@ fn resume_rejects_position_past_end() {
         Err(DomainError::InvalidPosition { position: 99, len: 2 })
     ));
 }
+
+// ---- timing --------------------------------------------------------------
+
+mod timing {
+    use chatterg::domain::{Engine, Questionnaire, Submission, Timing};
+    use chrono::{Duration, TimeZone, Utc};
+
+    fn one() -> Questionnaire {
+        serde_yaml::from_str("questions:\n  - {id: a, question: A?, required: true, type: text}\n")
+            .unwrap()
+    }
+
+    #[test]
+    fn timed_submission_records_latency() {
+        let sent = Utc.with_ymd_and_hms(2026, 10, 6, 9, 0, 0).unwrap();
+        let timing = Timing::new(sent, sent + Duration::milliseconds(250));
+
+        let Submission::Complete(engine) = Engine::new(one()).submit_timed("x".into(), timing)
+        else {
+            panic!("expected completion");
+        };
+
+        let attempt = &engine.conversation().answers[0].attempts[0];
+        assert_eq!(attempt.sent_at, Some(sent));
+        assert_eq!(attempt.latency_ms, Some(250));
+    }
+
+    #[test]
+    fn untimed_submission_leaves_times_empty() {
+        let Submission::Complete(engine) = Engine::new(one()).submit("x".into()) else {
+            panic!("expected completion");
+        };
+
+        let attempt = &engine.conversation().answers[0].attempts[0];
+        assert_eq!((attempt.sent_at, attempt.received_at, attempt.latency_ms), (None, None, None));
+    }
+
+    #[test]
+    fn latency_is_never_negative() {
+        let later = Utc.with_ymd_and_hms(2026, 10, 6, 9, 0, 5).unwrap();
+        let earlier = Utc.with_ymd_and_hms(2026, 10, 6, 9, 0, 0).unwrap();
+
+        assert_eq!(Timing::new(later, earlier).latency_ms(), Some(0));
+    }
+
+    #[test]
+    fn begin_and_finish_stamp_the_run_once() {
+        let first = Utc.with_ymd_and_hms(2026, 10, 6, 9, 0, 0).unwrap();
+        let second = first + Duration::hours(1);
+
+        let mut engine = Engine::new(one());
+        engine.begin(first);
+        engine.begin(second); // later calls (a resumed run) must not move the start
+
+        let Submission::Complete(engine) = engine.submit("x".into()) else {
+            panic!("expected completion");
+        };
+        let engine = engine.finish(second);
+
+        assert_eq!(engine.conversation().started_at, Some(first));
+        assert_eq!(engine.conversation().finished_at, Some(second));
+    }
+
+    #[test]
+    fn unfinished_run_is_not_stamped_finished() {
+        let at = Utc.with_ymd_and_hms(2026, 10, 6, 9, 0, 0).unwrap();
+        let engine = Engine::new(one()).finish(at);
+
+        assert_eq!(engine.conversation().finished_at, None);
+    }
+}

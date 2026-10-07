@@ -1,10 +1,14 @@
 use std::{future::Future, sync::Arc, time::Duration};
 
+use chrono::Utc;
 use thiserror::Error;
 use url::Url;
 
 use crate::{
-    domain::{DomainError, Engine, EngineState, Question, Questionnaire, Submission},
+    domain::{
+        AgentInfo, CooldownEvent, DomainError, Engine, EngineState, Question, Questionnaire,
+        Submission, Timestamp, Timing,
+    },
     storage::{StorageError, Store},
     transport::{Message, Transport, TransportError},
 };
@@ -43,6 +47,9 @@ pub enum Progress {
 
 pub type ProgressCallback = Arc<dyn Fn(&Progress) + Send + Sync>;
 
+/// Source of "now". Injectable so tests get deterministic timestamps.
+pub type Clock = Arc<dyn Fn() -> Timestamp + Send + Sync>;
+
 #[derive(Clone)]
 pub struct RunOptions {
     /// Pause when the agent stops answering (rate limit, outage, timeout).
@@ -55,6 +62,12 @@ pub struct RunOptions {
     /// "rate limited", not as an answer.
     pub rate_limit_phrases: Vec<String>,
     pub on_progress: Option<ProgressCallback>,
+
+    /// Continue a run even though the questions file changed, provided every
+    /// question already asked is unchanged.
+    pub force_resume: bool,
+
+    pub clock: Clock,
 }
 
 impl Default for RunOptions {
@@ -68,11 +81,17 @@ impl Default for RunOptions {
                 .map(|p| (*p).to_owned())
                 .collect(),
             on_progress: None,
+            force_resume: false,
+            clock: Arc::new(Utc::now),
         }
     }
 }
 
 impl RunOptions {
+    fn now(&self) -> Timestamp {
+        (self.clock)()
+    }
+
     fn notify(&self, progress: Progress) {
         if let Some(callback) = &self.on_progress {
             callback(&progress);
@@ -128,6 +147,9 @@ where
     let target = Url::parse(target)?;
 
     let mut engine = match store.load().await? {
+        Some(conversation) if options.force_resume => {
+            Engine::resume_forced(questionnaire, conversation)?
+        }
         Some(conversation) => Engine::resume(questionnaire, conversation)?,
         None => Engine::new(questionnaire),
     };
@@ -136,13 +158,36 @@ where
         return Ok(engine);
     }
 
-    let endpoint = with_cooldown(options, || transport.discover(&target), |_| None).await?.endpoint;
+    engine.begin(options.now());
+
+    let mut events = Vec::new();
+    let discovered =
+        with_cooldown(options, &mut events, || transport.discover(&target), |_| None).await;
+    engine.record_cooldowns(std::mem::take(&mut events));
+
+    let capabilities = match discovered {
+        Ok((capabilities, _)) => capabilities,
+        Err(error) => {
+            store.save(engine.conversation()).await?;
+            return Err(error);
+        }
+    };
+
+    let endpoint = capabilities.endpoint.clone();
+    engine.set_agent(AgentInfo {
+        name: capabilities.agent_name.clone(),
+        target: target.to_string(),
+        endpoint: endpoint.to_string(),
+        protocol: capabilities.protocols.first().map_or("unknown", |p| p.as_str()).to_owned(),
+    });
+
     let total = engine.total_questions();
 
     loop {
         let question = match engine.start() {
             EngineState::Asking(question) => question,
             EngineState::Ready | EngineState::Complete | EngineState::Aborted => {
+                let engine = engine.finish(options.now());
                 store.save(engine.conversation()).await?;
                 return Ok(engine);
             }
@@ -165,8 +210,9 @@ where
         };
 
         // The same message (and id) is re-sent after a cooldown: it was never answered.
-        let response = with_cooldown(
+        let sent = with_cooldown(
             options,
+            &mut events,
             || transport.send(&endpoint, message.clone()),
             |response| {
                 options.looks_rate_limited(&response.text).then(|| {
@@ -174,9 +220,20 @@ where
                 })
             },
         )
-        .await?;
+        .await;
 
-        match engine.submit(response.text) {
+        engine.record_cooldowns(std::mem::take(&mut events));
+
+        let (response, timing) = match sent {
+            Ok(done) => done,
+            Err(error) => {
+                // Keep the cooldown log even though the run is giving up.
+                store.save(engine.conversation()).await?;
+                return Err(error);
+            }
+        };
+
+        match engine.submit_timed(response.text, timing) {
             Submission::Next(next, _) | Submission::Retry(next, _) => {
                 store.save(next.conversation()).await?;
                 engine = next;
@@ -187,6 +244,7 @@ where
             }
 
             Submission::Aborted(next) | Submission::Unknown(next) | Submission::Complete(next) => {
+                let next = next.finish(options.now());
                 store.save(next.conversation()).await?;
                 return Ok(next);
             }
@@ -194,14 +252,16 @@ where
     }
 }
 
-/// Calls `operation` until it yields a usable result. Transient failures and
-/// replies flagged by `rejected` cause a cooldown and another try; anything
-/// else is returned immediately.
+/// Calls `operation` until it yields a usable result, returning it with the
+/// times just before the call and just after it. Transient failures and replies
+/// flagged by `rejected` cause a cooldown (logged in `events`) and another try;
+/// anything else is returned immediately.
 async fn with_cooldown<T, F, Fut>(
     options: &RunOptions,
+    events: &mut Vec<CooldownEvent>,
     mut operation: F,
     rejected: impl Fn(&T) -> Option<String>,
-) -> Result<T, ApplicationError>
+) -> Result<(T, Timing), ApplicationError>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, TransportError>>,
@@ -209,9 +269,13 @@ where
     let mut waits = 0;
 
     loop {
-        let reason = match operation().await {
+        let sent_at = options.now();
+        let outcome = operation().await;
+        let received_at = options.now();
+
+        let reason = match outcome {
             Ok(value) => match rejected(&value) {
-                None => return Ok(value),
+                None => return Ok((value, Timing::new(sent_at, received_at))),
                 Some(reason) => reason,
             },
             Err(error) if options.is_transient(&error) => error.to_string(),
@@ -223,6 +287,11 @@ where
         }
 
         waits += 1;
+        events.push(CooldownEvent {
+            at: received_at,
+            reason: reason.clone(),
+            seconds: options.cooldown.as_secs(),
+        });
         options.notify(Progress::Waiting {
             reason,
             wait: waits,

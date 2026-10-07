@@ -224,3 +224,233 @@ fn help_documents_cooldown_options() {
         .stdout(predicate::str::contains("--delay <SECONDS>"))
         .stdout(predicate::str::contains("--timeout <SECONDS>"));
 }
+
+// ---- exit codes, --restart, --force-resume, locking ------------------------
+
+mod m1 {
+    use super::{chatterg, json, predicate};
+    use mockito::{Mock, Server, ServerGuard};
+    use std::path::{Path, PathBuf};
+
+    async fn card(server: &mut ServerGuard) -> Mock {
+        let rpc_url = format!("{}/rpc", server.url());
+
+        server
+            .mock("GET", "/.well-known/agent-card.json")
+            .with_status(200)
+            .with_body(
+                json!({"name": "Mock", "supportedInterfaces": [
+                    {"url": rpc_url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
+                ]})
+                .to_string(),
+            )
+            .create_async()
+            .await
+    }
+
+    fn reply(text: &str) -> String {
+        json!({"jsonrpc": "2.0", "id": 1, "result": {"message": {"parts": [
+            {"kind": "text", "text": text}]}}})
+        .to_string()
+    }
+
+    async fn answering(server: &mut ServerGuard, text: &str, hits: usize) -> Mock {
+        server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(reply(text))
+            .expect(hits)
+            .create_async()
+            .await
+    }
+
+    fn write(dir: &Path, name: &str, body: &str) -> PathBuf {
+        let path = dir.join(name);
+        std::fs::write(&path, body).unwrap();
+        path
+    }
+
+    fn run(server: &ServerGuard, questions: &Path, store: &Path) -> assert_cmd::Command {
+        let mut command = chatterg();
+        command
+            .arg(server.url())
+            .arg(questions)
+            .args(["--cooldown", "0", "--max-waits", "1", "--store"])
+            .arg(store);
+        command
+    }
+
+    #[test]
+    fn help_lists_exit_codes_and_new_flags() {
+        chatterg()
+            .arg("--help")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("EXIT CODES"))
+            .stdout(predicate::str::contains("--force-resume"))
+            .stdout(predicate::str::contains("--restart"));
+    }
+
+    #[test]
+    fn restart_and_force_resume_cannot_be_combined() {
+        chatterg()
+            .args(["http://localhost:1", "questions.yaml", "--restart", "--force-resume"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("cannot be used with"));
+    }
+
+    #[test]
+    fn errors_exit_with_code_1() {
+        chatterg().args(["http://localhost:1", "/no/such/file.txt"]).assert().code(1);
+    }
+
+    #[tokio::test]
+    async fn completed_run_exits_0() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _rpc = answering(&mut server, "Acme", 1).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "Name?\n");
+
+        run(&server, &questions, &dir.path().join("c.db")).assert().code(0);
+    }
+
+    #[tokio::test]
+    async fn run_ended_by_abort_policy_exits_2() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _rpc = answering(&mut server, "not valid", 1).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(
+            dir.path(),
+            "q.yaml",
+            "questions:\n  - {id: stage, question: Stage?, required: true, type: enum, values: [pilot]}\n",
+        );
+        let store = dir.path().join("c.db");
+
+        run(&server, &questions, &store)
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("ended early"));
+
+        // re-running an aborted run does not ask again and is still "ended early"
+        run(&server, &questions, &store).assert().code(2);
+    }
+
+    #[tokio::test]
+    async fn agent_that_stays_unavailable_exits_3() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _limited = server.mock("POST", "/rpc").with_status(429).create_async().await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "Name?\n");
+
+        run(&server, &questions, &dir.path().join("c.db"))
+            .assert()
+            .code(3)
+            .stderr(predicate::str::contains("still unavailable"));
+    }
+
+    #[tokio::test]
+    async fn restart_archives_the_old_run_and_asks_again() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let rpc = answering(&mut server, "Acme", 2).await; // once per run
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "Name?\n");
+        let store = dir.path().join("c.db");
+
+        run(&server, &questions, &store).assert().success();
+        run(&server, &questions, &store)
+            .arg("--restart")
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("archived the previous run"));
+
+        rpc.assert_async().await;
+
+        let backups: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".bak"))
+            .collect();
+        assert_eq!(backups.len(), 1, "exactly one archive expected");
+    }
+
+    #[tokio::test]
+    async fn rerunning_a_finished_run_does_not_ask_again() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let rpc = answering(&mut server, "Acme", 1).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "Name?\n");
+        let store = dir.path().join("c.db");
+
+        run(&server, &questions, &store).assert().success();
+        run(&server, &questions, &store)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Acme"));
+
+        rpc.assert_async().await; // exactly one request in total
+    }
+
+    #[tokio::test]
+    async fn edited_questions_file_is_refused_then_forced() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("c.db");
+
+        // Run 1: answers the first question, then the agent stays unavailable.
+        let mut first = Server::new_async().await;
+        let _card1 = card(&mut first).await;
+        let _ok = answering(&mut first, "A1", 1).await;
+        let _limited = first.mock("POST", "/rpc").with_status(429).create_async().await;
+
+        let original = write(dir.path(), "q.txt", "One?\nTwo?\n");
+        run(&first, &original, &store).assert().code(3);
+
+        // The file now has a third question appended.
+        let edited = write(dir.path(), "q.txt", "One?\nTwo?\nThree?\n");
+
+        let mut second = Server::new_async().await;
+        let _card2 = card(&mut second).await;
+        let _rest = answering(&mut second, "more", 2).await;
+
+        run(&second, &edited, &store)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("changed since this run started"))
+            .stderr(predicate::str::contains("1 added (q003)"))
+            .stderr(predicate::str::contains("--force-resume"));
+
+        run(&second, &edited, &store)
+            .arg("--force-resume")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("q003"));
+    }
+
+    #[test]
+    fn a_store_in_use_by_another_run_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("c.db");
+        let questions = write(dir.path(), "q.txt", "Name?\n");
+
+        let _held = chatterg::storage::sqlite::SqliteStore::open(&store).unwrap();
+
+        chatterg()
+            .args(["http://localhost:1"])
+            .arg(&questions)
+            .arg("--store")
+            .arg(&store)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("another chatterg is already using"));
+    }
+}

@@ -23,6 +23,17 @@ pub enum StorageError {
     #[error("stored conversation is corrupt: {0}")]
     Corrupt(#[source] serde_json::Error),
 
+    #[error(
+        "stored conversation uses format version {found}, but this chatterg only understands \
+         up to version {supported}; upgrade chatterg"
+    )]
+    UnsupportedVersion { found: u32, supported: u32 },
+
+    #[error(
+        "another chatterg is already using {path}; wait for it to finish or use a different --store"
+    )]
+    Locked { path: String },
+
     #[error("storage internal error: {0}")]
     Internal(String),
 }
@@ -34,4 +45,5 @@ pub trait Store: Send + Sync {
     async fn load(&self) -> Result<Option<Conversation>, StorageError>;
 }
 
+pub mod migrate;
 pub mod sqlite;

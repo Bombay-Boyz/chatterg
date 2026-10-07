@@ -157,3 +157,6 @@ id_ed25519.pub
 *.patch
 *.orig
 *.rej
+
+# chatterg run lock file
+*.db.lock

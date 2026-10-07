@@ -1,11 +1,14 @@
 use std::{collections::HashSet, path::Path};
 
+use sha2::{Digest, Sha256};
+
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 
 use super::{
     error::DomainError,
     question::{AnswerType, FailurePolicy, Question, QuestionId},
+    run::QuestionSnapshot,
 };
 
 /// Phrases that mark an answer as evasive when none are configured.
@@ -160,6 +163,25 @@ impl Questionnaire {
         Ok(())
     }
 
+    /// What matters for telling whether a run can continue: ids, texts, types and
+    /// allowed values. Retry and evasion settings are deliberately left out.
+    pub fn snapshot(&self) -> Vec<QuestionSnapshot> {
+        self.questions
+            .iter()
+            .map(|question| QuestionSnapshot {
+                id: question.id.as_str().to_owned(),
+                question: question.question.clone(),
+                kind: question.answer_type.as_str().to_owned(),
+                values: question.values.clone(),
+            })
+            .collect()
+    }
+
+    /// SHA-256 (hex) over the snapshot. Stable across runs and machines.
+    pub fn fingerprint(&self) -> String {
+        fingerprint_of(&self.snapshot())
+    }
+
     pub fn required(&self) -> impl Iterator<Item = &Question> {
         self.questions.iter().filter(|question| question.required)
     }
@@ -221,4 +243,13 @@ fn clean_line(line: &str) -> Option<String> {
     }
 
     (!text.is_empty()).then(|| text.to_owned())
+}
+
+/// Hex SHA-256 of a question snapshot.
+pub fn fingerprint_of(snapshot: &[QuestionSnapshot]) -> String {
+    // Serialising plain structs of strings cannot fail; an empty hash input would
+    // still be deterministic, so fall back to that rather than panic.
+    let bytes = serde_json::to_vec(snapshot).unwrap_or_default();
+
+    Sha256::digest(&bytes).iter().map(|byte| format!("{byte:02x}")).collect()
 }

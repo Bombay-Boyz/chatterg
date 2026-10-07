@@ -251,7 +251,11 @@ impl Transport for A2aTransport {
             return Err(TransportError::UnsupportedProtocol);
         }
 
-        Ok(Capabilities { protocols: vec![Protocol::A2a], endpoint })
+        Ok(Capabilities {
+            protocols: vec![Protocol::A2a],
+            endpoint,
+            agent_name: Some(card.name.clone()),
+        })
     }
 
     async fn send(&self, target: &Url, message: Message) -> Result<Response, TransportError> {

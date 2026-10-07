@@ -23,10 +23,12 @@
 
 ### 1.2 Known limitations (the starting point for the roadmap)
 
-1. **No timestamps or latency.** Attempts record request, response and validation only. Reports cannot show *when* or *how long*.
-2. **Resume trusts the saved position.** Editing or reordering the questions file mid-run silently misaligns answers.
-3. **One conversation per database**, no run metadata, and **no schema version**, so format changes cannot be migrated.
-4. **No locking.** Two processes on one `.db` can interleave.
+> **Status update:** milestone **M1** is done (items 1, 2, 4 and the schema-version part of 3 below, plus exit codes and CI). Those entries are struck through. Everything else is still open.
+
+1. ~~**No timestamps or latency.** Attempts record request, response and validation only. Reports cannot show *when* or *how long*.~~ *Done (R1).*
+2. ~~**Resume trusts the saved position.** Editing or reordering the questions file mid-run silently misaligns answers.~~ *Done (H1).*
+3. **One conversation per database.** *(Run metadata and a schema version with migrations are done (R1); multiple runs per database is F3.)*
+4. ~~**No locking.** Two processes on one `.db` can interleave.~~ *Done (H2).*
 5. **Fixed waits.** The cooldown is a constant. `Retry-After` and `RateLimit-*` headers are ignored.
 6. **Stateless messages.** No `contextId`/`taskId` is sent, so the agent cannot connect one question to the next.
 7. **A2A tasks that are not finished** (`working`, `input-required`) are treated as malformed.
@@ -40,12 +42,12 @@
 
 | ID | Item | Value | Effort (days) | Depends on |
 |---|---|---|---|---|
-| **R1** | Timestamps, latency, schema version | High | 1 | none |
+| **R1** ✅ | Timestamps, latency, schema version | High | 1 | none |
 | **R2** | `report` command (Markdown, HTML, CSV, JSON) | High | 3 to 4 | R1 |
-| **H1** | Questions-file fingerprint on resume | High | 0.5 | R1 |
-| **H2** | Database locking, WAL, busy timeout | High | 0.5 | none |
+| **H1** ✅ | Questions-file fingerprint on resume | High | 0.5 | R1 |
+| **H2** ✅ | Database locking, WAL, busy timeout | High | 0.5 | none |
 | **H3** | Graceful Ctrl-C and run summary | Medium | 1 | none |
-| **H4** | Exit codes | Medium | 0.5 | none |
+| **H4** ✅ | Exit codes | Medium | 0.5 | none |
 | **B1** | `Retry-After` / `RateLimit-*` support | High | 1 to 1.5 | none |
 | **B2** | Client-side rate limiter and backoff | High | 1 | B1 |
 | **F1** | Sections in the questions file | Medium | 1 | R2 for use |
@@ -61,7 +63,7 @@
 | **F6** | Stronger answer checks (regex, length, refusal) | Medium | 1.5 | none |
 | **R3** | `compare` two runs | Low | 1.5 | R2, F3 |
 | **F7** | One questionnaire against several agents | Low | 3 | F3 |
-| **I1** | CI, `cargo audit`, MSRV pin | Medium | 1 | none |
+| **I1** ✅ | CI, `cargo audit`, MSRV pin | Medium | 1 | none |
 
 **Core track (R1, R2, H1 to H4, B1, B2, F1, F2, C1, I1): about 12 to 14 days.** Everything in the table: about 30 to 35 days.
 
@@ -69,7 +71,9 @@
 
 ## 3. Reporting
 
-### R1. Timestamps, latency and schema version  *(do this first)*
+### R1. Timestamps, latency and schema version  ✅ *done*
+
+> **As built:** every attempt stores `sent_at`, `received_at` and `latency_ms` (UTC; latency is never negative). The conversation stores `started_at`, `finished_at`, the agent (name, target, endpoint, protocol), the chatterg version and a cooldown log (`at`, `reason`, `seconds`). `schema_version` is 2; `storage::migrate` upgrades version-1 data on load and refuses data from a newer version. Data older than version 1 (before positions were stored) is still rejected rather than guessed. Time is read through an injectable clock, so tests are deterministic.
 
 **Problem.** Attempts record request, response and validation only. Without times, a report cannot show duration, cooldown impact or pace, and every later feature needs the data.
 
@@ -125,7 +129,9 @@ Diff two runs of the same questionnaire (for example the same bot on two days, o
 
 ## 4. Production hardening
 
-### H1. Detect a changed questions file
+### H1. Detect a changed questions file  ✅ *done*
+
+> **As built:** a SHA-256 fingerprint plus a snapshot of each question's id, text, type and allowed values is stored at the start of the run. Retry and dodge-word settings are deliberately not part of it. On resume, any change is refused with a summary (`1 added (q003)`, `order changed`, ...). `--force-resume` continues only if every question already asked (and the one in progress) is unchanged; reordering, removing or editing those is refused even with the flag. `--restart` copies the old run to `<store>.<timestamp>.bak` (`VACUUM INTO`) and starts over. Runs saved before fingerprints existed adopt the current questions once.
 
 **Problem.** The saved position is trusted. If you insert a question at position 5 after answering 10, the engine resumes at 10 against shifted questions. `Engine::resume` only checks that stored answer ids exist.
 
@@ -137,7 +143,9 @@ Diff two runs of the same questionnaire (for example the same bot on two days, o
 
 **Acceptance tests.** Edited, reordered, appended and unchanged files each produce the intended outcome; `--force-resume` refuses a reorder of answered questions.
 
-### H2. Database locking and robustness
+### H2. Database locking and robustness  ✅ *done*
+
+> **As built:** an exclusive advisory lock on `<store>.lock` (via the `fs2` crate) is taken when the store is opened and released when it is dropped or the process dies, so a crash never leaves a stale lock. The database uses WAL with `synchronous=NORMAL` and a 5 s busy timeout. Saves are a single atomic upsert. Not done: a periodic `integrity_check` (planned for `status`, C2).
 
 **Problem.** Two processes using one database can interleave writes. A killed process can leave a journal.
 
@@ -156,7 +164,9 @@ Diff two runs of the same questionnaire (for example the same bot on two days, o
 
 **Acceptance tests.** Send SIGINT to the binary during a mock cooldown and confirm it exits quickly with state saved.
 
-### H4. Exit codes
+### H4. Exit codes  ✅ *done*
+
+> **As built:** 0, 1, 2 and 3 as listed below; they are shown in `--help`. The 130 (interrupted) code arrives with H3 (graceful Ctrl-C), which is not done yet.
 
 | Code | Meaning |
 |---|---|
@@ -168,7 +178,9 @@ Diff two runs of the same questionnaire (for example the same bot on two days, o
 
 This lets cron and CI react correctly. Document it in `--help`.
 
-### I1. CI and supply chain
+### I1. CI and supply chain  ✅ *done*
+
+> **As built:** `.github/workflows/ci.yml` (fmt, clippy `-D warnings`, tests on stable and on the declared minimum Rust, 1.88), `.github/workflows/audit.yml` (`rustsec/audit-check`, weekly and on lockfile changes), `.github/dependabot.yml`, and `rust-version = "1.88"` in `Cargo.toml`. Not done: `cargo deny` and release binaries. The workflows have not been run on GitHub yet.
 
 - GitHub Actions on push/PR: `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test --all-targets`, on stable and the pinned MSRV.
 - `cargo audit` and `cargo deny` (licences, banned crates) on a schedule.
@@ -363,7 +375,7 @@ Run the same questions against a list of agent URLs sequentially (each with its 
 
 | Milestone | Contents | Effort | Outcome |
 |---|---|---|---|
-| **M1: Trustworthy results** | R1, H1, H2, H4, I1 | ~3.5 days | Safe resume, no data confusion, CI in place |
+| **M1: Trustworthy results** ✅ *done* | R1, H1, H2, H4, I1 | ~3.5 days | Safe resume, no data confusion, CI in place |
 | **M2: Report** | R2, F1 | ~4.5 days | A shareable report grouped by section |
 | **M3: Polite and robust** | B1, B2, H3, C1 | ~4.5 days | Respects server limits, clean stop, logs |
 | **M4: Operator comfort** | F2, C2, D1, D2 | ~6 days | Dry-run, status, probe, config, auth |
