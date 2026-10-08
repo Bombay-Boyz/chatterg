@@ -309,14 +309,15 @@ fn flatten_sections(
 }
 
 /// What one line of a text questions file means.
-enum Line {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Line {
     Skip,
     /// `## Heading` starts a section; a bare `##` ends it.
     Section(Option<String>),
     Question(String),
 }
 
-fn parse_line(line: &str) -> Line {
+pub fn parse_line(line: &str) -> Line {
     let trimmed = line.trim();
 
     if trimmed.starts_with("##") {

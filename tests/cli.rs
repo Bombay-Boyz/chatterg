@@ -1006,3 +1006,457 @@ mod auto_report {
             .stdout(predicate::str::contains("--overwrite"));
     }
 }
+
+// ---- the friendly workflow: add / list / remove / run -------------------------------------
+
+mod friendly {
+    use super::{chatterg, json, predicate};
+    use chatterg::storage::{Store, sqlite::SqliteStore};
+    use mockito::{Mock, Server, ServerGuard};
+    use predicates::prelude::PredicateBooleanExt;
+    use std::path::{Path, PathBuf};
+
+    async fn card(server: &mut ServerGuard) -> Mock {
+        let rpc_url = format!("{}/rpc", server.url());
+
+        server
+            .mock("GET", "/.well-known/agent-card.json")
+            .with_status(200)
+            .with_body(
+                json!({"name": "Mock Agent", "supportedInterfaces": [
+                    {"url": rpc_url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
+                ]})
+                .to_string(),
+            )
+            .create_async()
+            .await
+    }
+
+    async fn answering(server: &mut ServerGuard, text: &str, hits: usize) -> Mock {
+        server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(
+                json!({"jsonrpc": "2.0", "id": 1, "result": {"message": {"parts": [
+                    {"kind": "text", "text": text}]}}})
+                .to_string(),
+            )
+            .expect(hits)
+            .create_async()
+            .await
+    }
+
+    fn write(dir: &Path, name: &str, body: &str) -> PathBuf {
+        let path = dir.join(name);
+        std::fs::write(&path, body).unwrap();
+        path
+    }
+
+    /// `chatterg run <server>` inside `dir`, with no waiting.
+    fn run(dir: &Path, server: &ServerGuard) -> assert_cmd::Command {
+        let mut command = chatterg();
+        command.current_dir(dir).args([
+            "run",
+            &server.url(),
+            "--cooldown",
+            "0",
+            "--max-waits",
+            "0",
+        ]);
+        command
+    }
+
+    fn run_folders(dir: &Path) -> Vec<PathBuf> {
+        let mut folders: Vec<_> = match std::fs::read_dir(dir.join("runs")) {
+            Ok(entries) => entries.filter_map(Result::ok).map(|entry| entry.path()).collect(),
+            Err(_) => Vec::new(),
+        };
+        folders.sort();
+        folders
+    }
+
+    async fn working_notebook_is_empty(dir: &Path) -> bool {
+        SqliteStore::open_read_only(dir.join("chatterg.db"))
+            .unwrap()
+            .load()
+            .await
+            .unwrap()
+            .is_none()
+    }
+
+    // ---- run ------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn run_asks_everything_saves_a_report_and_empties_the_notebook() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _rpc = answering(&mut server, "<b>Acme</b>", 2).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "questions.txt", "## Basics\nOne?\nTwo?\n");
+
+        run(dir.path(), &server)
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("Done: 2 questions"))
+            .stdout(predicate::str::contains("Saved to runs/"))
+            .stdout(predicate::str::contains("report.html"))
+            .stdout(predicate::str::contains("The notebook is empty again"))
+            .stderr(predicate::str::contains("[2/2] q002"));
+
+        let folders = run_folders(dir.path());
+        assert_eq!(folders.len(), 1);
+        let mut files: Vec<_> = std::fs::read_dir(&folders[0])
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        files.sort();
+        assert_eq!(
+            files,
+            ["answers.csv", "notebook.db", "questions.txt", "report.html", "report.md"]
+        );
+
+        let html = std::fs::read_to_string(folders[0].join("report.html")).unwrap();
+        assert!(html.contains("&lt;b&gt;Acme&lt;/b&gt;") && !html.contains("<b>Acme</b>"));
+        assert!(
+            std::fs::read_to_string(folders[0].join("report.md")).unwrap().contains("### Basics")
+        );
+
+        // your question bank is left exactly as it was, ready for the next run
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("questions.txt")).unwrap(),
+            "## Basics\nOne?\nTwo?\n"
+        );
+        assert!(working_notebook_is_empty(dir.path()).await);
+    }
+
+    #[tokio::test]
+    async fn running_again_asks_the_bot_again_and_saves_a_second_folder() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let rpc = answering(&mut server, "Acme", 4).await; // 2 questions x 2 runs
+
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "questions.txt", "One?\nTwo?\n");
+
+        run(dir.path(), &server).assert().success();
+        run(dir.path(), &server).assert().success();
+
+        rpc.assert_async().await;
+        assert_eq!(run_folders(dir.path()).len(), 2);
+        assert!(working_notebook_is_empty(dir.path()).await);
+    }
+
+    #[tokio::test]
+    async fn a_questions_file_and_a_runs_folder_can_be_chosen() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _rpc = answering(&mut server, "Acme", 1).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "other.txt", "Only one?\n");
+
+        run(dir.path(), &server)
+            .args(["other.txt", "--runs-dir", "saved/answers"])
+            .assert()
+            .success();
+
+        let saved: Vec<_> =
+            std::fs::read_dir(dir.path().join("saved").join("answers")).unwrap().collect();
+        assert_eq!(saved.len(), 1);
+        assert!(!dir.path().join("runs").exists());
+    }
+
+    #[test]
+    fn without_a_question_bank_the_message_says_how_to_start() {
+        let dir = tempfile::tempdir().unwrap();
+
+        chatterg()
+            .current_dir(dir.path())
+            .args(["run", "http://localhost:1"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("there is no questions.txt"))
+            .stderr(predicate::str::contains("chatterg add"));
+
+        assert!(!dir.path().join("chatterg.db").exists(), "nothing may be created");
+    }
+
+    #[tokio::test]
+    async fn a_run_that_ends_early_is_saved_too_and_the_notebook_is_emptied() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _rpc = answering(&mut server, "not valid", 1).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            dir.path(),
+            "questions.yaml",
+            "questions:\n  - {id: stage, question: Stage?, required: true, type: enum, values: [pilot]}\n",
+        );
+
+        run(dir.path(), &server)
+            .arg("questions.yaml")
+            .assert()
+            .code(2)
+            .stdout(predicate::str::contains("Stopped early"))
+            .stdout(predicate::str::contains("Saved to runs/"))
+            .stdout(predicate::str::contains("questions.yaml"));
+
+        assert_eq!(run_folders(dir.path()).len(), 1);
+        assert!(
+            working_notebook_is_empty(dir.path()).await,
+            "an ended run must not block the next one"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_interrupted_run_carries_on_and_is_saved_when_done() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _first = answering(&mut server, "A1", 1).await;
+        let _limited = server.mock("POST", "/rpc").with_status(429).create_async().await;
+
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "questions.txt", "One?\nTwo?\n");
+
+        run(dir.path(), &server)
+            .assert()
+            .code(3)
+            .stderr(predicate::str::contains("Your progress is saved"));
+        assert!(run_folders(dir.path()).is_empty(), "an unfinished run is not put away");
+        assert!(!working_notebook_is_empty(dir.path()).await);
+
+        // the bot recovers
+        server.reset();
+        let _card = card(&mut server).await;
+        let _rest = answering(&mut server, "A2", 1).await;
+
+        run(dir.path(), &server)
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Carrying on: 1 of 2 questions are already done"))
+            .stdout(predicate::str::contains("Done: 2 questions"));
+
+        let folders = run_folders(dir.path());
+        assert_eq!(folders.len(), 1);
+        let csv = std::fs::read_to_string(folders[0].join("answers.csv")).unwrap();
+        assert!(csv.contains("A1") && csv.contains("A2"));
+        assert!(working_notebook_is_empty(dir.path()).await);
+    }
+
+    #[tokio::test]
+    async fn an_unfinished_run_for_another_bot_is_not_mixed_up_with_this_one() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "questions.txt", "One?\nTwo?\n");
+
+        // bot A answers once, then is unavailable
+        let mut bot_a = Server::new_async().await;
+        let _card_a = card(&mut bot_a).await;
+        let _ok = answering(&mut bot_a, "from A", 1).await;
+        let _limited = bot_a.mock("POST", "/rpc").with_status(429).create_async().await;
+        run(dir.path(), &bot_a).assert().code(3);
+
+        // asking bot B now must not silently reuse A's answers
+        let mut bot_b = Server::new_async().await;
+        let _card_b = card(&mut bot_b).await;
+        let rpc_b = answering(&mut bot_b, "from B", 0).await;
+
+        run(dir.path(), &bot_b)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("an unfinished run for"))
+            .stderr(predicate::str::contains("--restart"));
+        rpc_b.assert_async().await;
+
+        // --restart puts A's run aside and asks B everything
+        let mut bot_c = Server::new_async().await;
+        let _card_c = card(&mut bot_c).await;
+        let _rpc_c = answering(&mut bot_c, "from C", 2).await;
+
+        run(dir.path(), &bot_c).arg("--restart").assert().success();
+
+        let csv = std::fs::read_to_string(run_folders(dir.path())[0].join("answers.csv")).unwrap();
+        assert!(csv.contains("from C") && !csv.contains("from A"));
+
+        let backups = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".bak"))
+            .count();
+        assert_eq!(backups, 1, "the abandoned run is kept as a backup");
+    }
+
+    #[tokio::test]
+    async fn a_finished_run_left_in_the_notebook_is_put_away_before_the_new_one_starts() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _rpc = answering(&mut server, "Acme", 2).await; // once for the old run, once for the new
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "questions.txt", "One?\n");
+
+        // the advanced form keeps the finished notebook, as it always did
+        chatterg()
+            .current_dir(dir.path())
+            .arg(server.url())
+            .arg(&questions)
+            .args(["--cooldown", "0"])
+            .assert()
+            .success();
+        assert!(!working_notebook_is_empty(dir.path()).await);
+
+        run(dir.path(), &server)
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("never put away"));
+
+        assert_eq!(run_folders(dir.path()).len(), 2, "the old run and the new run");
+        assert!(working_notebook_is_empty(dir.path()).await);
+    }
+
+    #[test]
+    fn help_shows_the_quick_start() {
+        chatterg()
+            .arg("--help")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("QUICK START"))
+            .stdout(predicate::str::contains("chatterg add"))
+            .stdout(predicate::str::contains("run "))
+            .stdout(predicate::str::contains("list"))
+            .stdout(predicate::str::contains("remove"));
+
+        chatterg()
+            .args(["run", "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("--runs-dir"))
+            .stdout(predicate::str::contains("--delay"))
+            .stdout(predicate::str::contains("[QUESTIONS_FILE]"));
+    }
+
+    // ---- the question bank -------------------------------------------------------------
+
+    #[test]
+    fn add_list_and_remove_work_on_questions_txt() {
+        let dir = tempfile::tempdir().unwrap();
+        let in_dir = || {
+            let mut command = chatterg();
+            command.current_dir(dir.path());
+            command
+        };
+
+        in_dir()
+            .args(["add", "What is a zeolite?"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Added as question 1 in questions.txt"))
+            .stdout(predicate::str::contains(".bak").not());
+
+        in_dir()
+            .args(["add", "What is Nxtbrane?", "--section", "Nxtbrane"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Added as question 2"))
+            .stdout(predicate::str::contains("questions.txt.bak"));
+
+        in_dir()
+            .arg("list")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("questions.txt: 2 questions"))
+            .stdout(predicate::str::contains("## Nxtbrane"))
+            .stdout(predicate::str::contains(" 2  What is Nxtbrane?"));
+
+        in_dir()
+            .args(["remove", "1"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Removed question 1"))
+            .stdout(predicate::str::contains("What is a zeolite?"));
+
+        in_dir().arg("list").assert().success().stdout(predicate::str::contains("1 question\n"));
+
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("questions.txt")).unwrap(),
+            "\n## Nxtbrane\nWhat is Nxtbrane?\n"
+        );
+    }
+
+    #[test]
+    fn bank_mistakes_are_explained_and_change_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write(dir.path(), "questions.txt", "One?\n");
+        let in_dir = || {
+            let mut command = chatterg();
+            command.current_dir(dir.path());
+            command
+        };
+
+        in_dir()
+            .args(["add", "ONE?"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("already in the bank as number 1"));
+        in_dir()
+            .args(["add", "- looks like a list item"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("read differently"));
+        in_dir()
+            .args(["remove", "9"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("there is no question number 9"));
+        in_dir().args(["remove", "0"]).assert().code(1);
+
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "One?\n");
+    }
+
+    #[test]
+    fn listing_a_missing_bank_says_how_to_start_and_yaml_banks_are_not_edited() {
+        let dir = tempfile::tempdir().unwrap();
+
+        chatterg()
+            .current_dir(dir.path())
+            .arg("list")
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("there is no questions.txt yet"));
+
+        write(dir.path(), "bank.yaml", "questions: [\"One?\"]\n");
+
+        chatterg()
+            .current_dir(dir.path())
+            .args(["add", "Two?", "--file", "bank.yaml"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("YAML file"));
+
+        chatterg()
+            .current_dir(dir.path())
+            .args(["list", "--file", "bank.yaml"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("bank.yaml: 1 question"));
+    }
+
+    #[test]
+    fn the_bank_file_can_be_chosen() {
+        let dir = tempfile::tempdir().unwrap();
+
+        chatterg()
+            .current_dir(dir.path())
+            .args(["add", "One?", "--file", "mine/bank.txt"])
+            .assert()
+            .success();
+
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("mine").join("bank.txt")).unwrap(),
+            "One?\n"
+        );
+        assert!(!dir.path().join("questions.txt").exists());
+    }
+}

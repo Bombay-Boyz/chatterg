@@ -61,6 +61,99 @@ This makes the program. It lives here: `target/release/chatterg`
 
 ---
 
+## The easy way: three commands 🚀
+
+**1. Put your questions in the bank.** The bank is a plain file called `questions.txt` in the folder where you work. Add questions with a command, or just open the file and type one per line, whichever you like.
+
+```bash
+./target/release/chatterg add "What is a zeolite?"
+./target/release/chatterg add "What is Nxtbrane?" --section "Nxtbrane"
+./target/release/chatterg list
+```
+
+```
+questions.txt: 2 questions
+
+ 1  What is a zeolite?
+
+## Nxtbrane
+ 2  What is Nxtbrane?
+```
+
+**2. Run it.** Just give the bot's address:
+
+```bash
+./target/release/chatterg run https://the-bots-address.example/agent
+```
+
+chatterg asks every question. When the last one is done, it saves **everything** in a new folder and tells you where:
+
+```
+Done: 2 questions over 4m 10s: 2 answered.
+
+Saved to runs/20261008-153012-the-bots-address-example-agent/
+  report.html   open this one in your browser
+  report.md     the same report as plain text
+  answers.csv   for spreadsheets
+  questions.txt the questions that were asked
+  notebook.db   the raw record
+
+The notebook is empty again. Run the same command to ask the bot again.
+```
+
+**3. Run it again whenever you like.** The notebook (chatterg's memory) was emptied, so the same command asks the bot **all the questions again** and saves a **new** folder. Old folders are never touched.
+
+That's the whole routine. Everything else on this page is optional.
+
+### Changing your questions
+
+| I want to... | Do this |
+|---|---|
+| See my questions | `chatterg list` (they are numbered) |
+| Add one | `chatterg add "Your question?"` |
+| Add one under a heading | `chatterg add "Your question?" --section "Name"` (the heading is made if it is new) |
+| Remove one | `chatterg remove 5` (use the number from `list`) |
+| Change one | `chatterg remove 5`, then `chatterg add "The new wording?"`. Or open `questions.txt` in any editor |
+| Use a different bank | `chatterg add "..." --file other.txt`, then `chatterg run <url> other.txt` |
+
+- Every time chatterg changes the file it keeps the previous version next to it as `questions.txt.bak`, in case you change your mind.
+- `add` refuses a question that is already there, and refuses text that the file would read differently (for example a line starting with `#`, `-` or `1.`).
+- `add` and `remove` only edit plain-text files. If you use a YAML question file, edit it by hand.
+
+### If a run stops halfway
+
+Rate limit, power cut, closed laptop: your progress is saved. Run **the same command again** and chatterg says `Carrying on: 37 of 89 questions are already done.`, then continues. When it finishes, the folder is saved as usual.
+
+- If you give it a **different bot's address** while an unfinished run is waiting, chatterg stops and tells you, so two bots' answers are never mixed. Finish the first one, or add `--restart` to put the unfinished run aside (a backup is kept) and start over.
+- If you edit `questions.txt` while a run is unfinished, chatterg notices (see "What if I change my questions file halfway?" below).
+
+### Options for `chatterg run`
+
+`chatterg run <AGENT_URL> [QUESTIONS_FILE] [switches]`. All switches are optional.
+
+| Switch | Normal value | What it does |
+|---|---|---|
+| `QUESTIONS_FILE` | `questions.txt` | Use a different question bank. |
+| `--runs-dir <FOLDER>` | `runs` | Where the dated folders are saved. |
+| `--delay <SECONDS>` | `0` | Pause between questions. Great for strict bots. |
+| `--cooldown <SECONDS>` | `120` | Nap length when the bot says "slow down". |
+| `--max-waits <N>` | `30` | How many naps in a row before giving up. |
+| `--timeout <SECONDS>` | `120` | How long to wait for one answer. |
+| `--retries <N>` | `2` | Extra tries when an answer is dodgy. |
+| `--restart` | off | Put an unfinished run aside and start over. |
+| `--force-resume` | off | Carry on after you added questions to the end of the bank. |
+| `--store <FILE>` | `chatterg.db` | The working notebook. You rarely need to change it. |
+
+The full list of switches, with explanations, is in "All the switches" below.
+
+> 🧠 A run that ends early (a question with `on_failure: abort` failed) is saved the same way and the notebook is emptied, so it never blocks your next run. The exit code is `2`.
+
+---
+
+## The advanced way: you choose the files (`chatterg <url> <file>`)
+
+Everything above is built on this older form, which still works exactly as before. It does **not** empty the notebook for you, and it does not create dated folders. Use it when you want full control: your own notebook name, your own report file names (`--report`).
+
 ## Step 2: Make your list of questions
 
 The easiest way: make a text file. **One question on each line.** That's all.
@@ -101,7 +194,7 @@ This repo comes with a ready-made list in `questions/zeolite_membranes.txt` (120
 
 ---
 
-## Step 3: Run it!
+## Step 3: Run it the advanced way!
 
 ```bash
 ./target/release/chatterg  https://the-bots-address.example/agent  my_questions.txt
@@ -516,6 +609,14 @@ chatterg tells you what happened on the screen, starting with `error:`. Here is 
 | `the notebook <file> does not contain a run yet` | The notebook exists but chatterg never asked anything | Run chatterg first |
 | `<file> already exists; choose another name or add --overwrite` | `report --out` would replace a file | Pick a new name, or add `--overwrite` |
 | `the questions file does not match the one this run used` | `report --questions` was given different questions | Use the original file, or leave `--questions` out |
+| `there is no questions.txt in this folder yet` | You used `chatterg run` before adding any questions | `chatterg add "Your question?"`, or name another file |
+| `an unfinished run for <address> is waiting in <notebook>` | An earlier run for a different bot didn't finish | Run the same command with that address to finish it, or add `--restart` |
+| `An earlier run had finished but was never put away` | An old finished run was still in the notebook. chatterg saved it in `runs/` for you | Nothing. It is only a note |
+| `the run is finished and still saved in <db>, but it could not be put away` | The folder or files couldn't be written (disk full? no permission?) | Fix that, then run the same command again. Nothing was lost |
+| `that question is already in the bank as number N` | `chatterg add` found the same question | Nothing to do, or reword it |
+| `that text would be read differently from how you typed it` | The question starts with `#`, `-`, `*`, `1.` or is in quote marks | Reword it |
+| `there is no question number N` | `chatterg remove` was given a number that isn't in `list` | Look at `chatterg list` |
+| `chatterg can only edit plain-text question files` | You used `add`/`remove` on a `.yaml` file | Edit YAML files by hand |
 | `cannot read questionnaire <file>` | The questions file isn't where you said | Check the file name and folder |
 | `invalid questionnaire <file>` | A `.yaml` file has a spelling or spacing mistake | Check the YAML (spaces matter!) |
 | `invalid question #N in <file>` | Question card number N is missing a field or has a wrong value | Look at that card |
@@ -572,6 +673,8 @@ chatterg/
 ├── src/
 │   ├── main.rs                the front door: reads your switches
 │   ├── application.rs         the boss: asks, waits, naps, saves
+│   ├── bank.rs                your question bank: add, list, remove
+│   ├── runs.rs                saving a finished run in runs/<date>-<bot>/
 │   ├── domain/                the rules: questions, answers, checking answers
 │   ├── storage/               the notebook (SQLite): saving, locking, upgrading old notebooks
 │   ├── transport/             how to talk to bots (A2A) + a pretend bot for tests
@@ -587,7 +690,7 @@ chatterg/
 - Each question is sent on its own. The bot is not told about the earlier questions.
 - One notebook holds **one** conversation.
 - It only talks to A2A bots for now.
-- It only writes a report by itself when you add `--report`. There is no default report yet, and it doesn't empty your questions file afterwards (both are planned, see the roadmap).
+- `chatterg run` keeps your question bank as it is, so you can run it again. It does **not** empty `questions.txt` for you (that is planned as an opt-in switch, see the roadmap). Use `chatterg remove`, or edit the file.
 
 Want to know what we plan to build next (reports, safer resume, smarter waiting, talking to more kinds of bots)? Read **[ROADMAP.md](ROADMAP.md)**.
 
@@ -596,6 +699,15 @@ Want to know what we plan to build next (reports, safer resume, smarter waiting,
 ## Cheat sheet 🧾
 
 ```bash
+# The easy way
+./target/release/chatterg  add "Your question?"        # put a question in questions.txt
+./target/release/chatterg  list                         # see the numbered questions
+./target/release/chatterg  remove 3                     # remove question number 3
+./target/release/chatterg  run  <BOT_URL>               # ask them all, save runs/<date>-<bot>/, empty the notebook
+./target/release/chatterg  run  <BOT_URL> --delay 60    # same, politely slowly
+# stopped halfway? run the SAME command again. It carries on.
+
+# The advanced way (you pick the files)
 # Build once
 cargo build --release
 

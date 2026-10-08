@@ -232,7 +232,7 @@ impl Report {
         let summary = &self.summary;
         let mut note = format!("Done: {}", plural(summary.total_questions, "question"));
 
-        if let Some(seconds) = self.run.duration_seconds {
+        if let Some(seconds) = self.run.duration_seconds.filter(|seconds| *seconds > 0) {
             note.push_str(&format!(" over {}", duration_text(seconds)));
         }
 
@@ -254,6 +254,17 @@ impl Report {
         }
 
         note
+    }
+
+    /// One line for a run that stopped before the end (a question failed with an
+    /// `abort` policy).
+    pub fn stopped_note(&self) -> String {
+        let summary = &self.summary;
+
+        format!(
+            "Stopped early: {} of {} answered, {} rejected, {} not asked.",
+            summary.answered, summary.total_questions, summary.rejected, summary.not_asked
+        )
     }
 
     pub fn render(&self, format: Format) -> String {

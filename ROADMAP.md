@@ -64,7 +64,8 @@
 | **R3** | `compare` two runs | Low | 1.5 | R2, F3 |
 | **F7** | One questionnaire against several agents | Low | 3 | F3 |
 | **I1** ✅ | CI, `cargo audit`, MSRV pin | Medium | 1 | none |
-| **W1** | Simpler way to feed questions (convention folder, `chatterg add`, stdin) | High | 1.5 | D1 helps |
+| **W1** ✅ | Simpler way to feed questions (convention folder, `chatterg add`, stdin) | High | 1.5 | D1 helps |
+| **W4** ✅ | Put a finished run away (dated folder) and empty the notebook so the next run starts fresh | High | 1.5 | R2, W2 |
 | **W2** ✅ | Completion note and automatic report when a run finishes | High | 1 | R2 |
 | **W3** | Archive, then clear, the questions file after a successful run (opt-in) | Medium | 1 to 1.5 | W2 |
 
@@ -397,7 +398,15 @@ M1 and M2 alone (about 8 days) turn the current tool into something you can run 
 
 **Goal.** Drop questions into a file, press one button, get a report, and be ready for the next batch, without thinking about notebooks, flags or file names.
 
-### W1. A simpler way to feed questions
+### W4. Finished runs are put away, and the notebook starts empty  ✅ *done*
+
+> **Requested:** "once a task is over, a report should be created and the set of answers has to become empty, so we can run the program again and get answers from the target bot again."
+>
+> **As built:** `chatterg run <url>` is the friendly form. When the run is over (every question processed, or ended early by an `abort` policy), chatterg creates `runs/<finish time>-<bot>/` containing `report.html`, `report.md`, `answers.csv`, a copy of the questions that were asked, and `notebook.db` (a verified copy of the raw record). Only after all of that has been written does it empty the working notebook (`archive_and_reset`), so a failure at any step leaves the run intact and retryable, and a half-written folder is removed. Folders are never overwritten (a `-2`, `-3` suffix is added). Leftovers are handled: a finished run found in the notebook is put away first, and an unfinished run for a **different bot** is refused so two bots' answers are never mixed (`--restart` sets it aside with a backup). Interrupted runs carry on as before ("Carrying on: 37 of 89 ..."). The old form `chatterg <url> <file>` is unchanged (notebook kept, `--report` available). *Not built:* clearing `questions.txt` (W3, still opt-in only), and a `chatterg runs` command to list or reopen saved runs.
+
+### W1. A simpler way to feed questions  ✅ *done (core)*
+
+> **As built:** the *question bank* is `questions.txt` in the working folder, used by default by `chatterg run`. `chatterg add "text" [--section NAME]` (end of the file, or end of the named section, which is created if new), `chatterg list` (numbered, grouped by section, works for YAML banks too) and `chatterg remove N`. Edits go through a temporary file and a rename, always keep `<file>.bak`, refuse duplicates (case-insensitive) and any text the loader would read differently (leading `#`, `-`, `*`, `1.`, quote marks), and never touch comments, headings or blank lines. YAML banks are read but not edited. *Not built:* `-` for standard input, a default target in the config file (needs D1), and the `inbox/` folder of batches.
 
 **Today:** write a text file, then give the URL, the file and a notebook name every time.
 
