@@ -65,7 +65,7 @@
 | **F7** | One questionnaire against several agents | Low | 3 | F3 |
 | **I1** ✅ | CI, `cargo audit`, MSRV pin | Medium | 1 | none |
 | **W1** | Simpler way to feed questions (convention folder, `chatterg add`, stdin) | High | 1.5 | D1 helps |
-| **W2** | Completion note and automatic report when a run finishes | High | 1 | R2 |
+| **W2** ✅ | Completion note and automatic report when a run finishes | High | 1 | R2 |
 | **W3** | Archive, then clear, the questions file after a successful run (opt-in) | Medium | 1 to 1.5 | W2 |
 
 **Core track (R1, R2, H1 to H4, B1, B2, F1, F2, C1, I1): about 12 to 14 days.** Everything in the table: about 30 to 35 days.
@@ -410,7 +410,10 @@ M1 and M2 alone (about 8 days) turn the current tool into something you can run 
 
 **Effort:** about 1.5 days, 150 to 220 source lines plus tests.
 
-### W2. Completion note and automatic report
+### W2. Completion note and automatic report  ✅ *done*
+
+> **As built:** a finished run (state `Complete`) prints `Done: 89 questions over 3h 12m 05s: 87 answered, 2 rejected. Paused 3 times for 30m 00s.` to the screen, and `--report FILE` (repeatable) writes a report in the format of the file ending (`.md`, `.html`, `.csv`, `.json`), with the questions file's sections. Everything about the reports is checked **before the first question is asked**: unknown ending, duplicate name, an existing file without `--overwrite`, a folder, or a path that is the questions file or the notebook are all refused. Missing folders are created. Files are created with "create new" semantics unless `--overwrite`, so there is no check-then-write gap. Runs that end early (exit 2) or give up (exit 3) write nothing. If a report cannot be written after a successful run, the notebook is already saved and the error shows the exact `chatterg report --store ...` command to retry (exit 1). *Not built:* default report names or a default folder (that is W1's folder convention), and the optional `--on-complete <program>` hook.
+
 
 When a run reaches `Complete` (every question processed), chatterg writes the report itself and says so:
 

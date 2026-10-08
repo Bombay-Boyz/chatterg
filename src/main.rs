@@ -153,6 +153,16 @@ struct RunArgs {
     /// first question.
     #[arg(long)]
     restart: bool,
+
+    /// Write a report when the run finishes (every question processed). The format
+    /// comes from the file ending: .md, .html, .csv or .json. Repeat for several
+    /// formats. Missing folders are created.
+    #[arg(long = "report", value_name = "FILE")]
+    reports: Vec<PathBuf>,
+
+    /// Allow --report to replace files that already exist.
+    #[arg(long, requires = "reports")]
+    overwrite: bool,
 }
 
 /// How a run that did not fail ended.
@@ -168,6 +178,86 @@ fn backup_path(store: &Path) -> PathBuf {
     let mut name = store.as_os_str().to_owned();
     name.push(format!(".{}.bak", chrono::Utc::now().format("%Y%m%dT%H%M%SZ")));
     PathBuf::from(name)
+}
+
+/// Writes `text` to `path`, creating missing folders. An existing file is only
+/// replaced when `overwrite` is set; the check and the write are one atomic step.
+fn write_file(path: &Path, text: &str, overwrite: bool) -> Result<(), String> {
+    use std::io::Write;
+
+    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create the folder {}: {error}", parent.display()))?;
+    }
+
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true);
+    if overwrite {
+        options.create(true).truncate(true);
+    } else {
+        options.create_new(true);
+    }
+
+    let mut file = options.open(path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            format!("{} already exists; choose another name or add --overwrite", path.display())
+        } else {
+            format!("cannot write {}: {error}", path.display())
+        }
+    })?;
+
+    file.write_all(text.as_bytes())
+        .map_err(|error| format!("cannot write {}: {error}", path.display()))
+}
+
+/// True when both paths name the same existing file.
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// Checks every `--report` before anything is asked, so a mistake costs seconds
+/// instead of a finished run.
+fn plan_reports(args: &RunArgs) -> Result<Vec<(PathBuf, Format)>, String> {
+    let mut plan: Vec<(PathBuf, Format)> = Vec::new();
+
+    for path in &args.reports {
+        let format = Format::from_path(path).ok_or_else(|| {
+            format!(
+                "cannot tell the report format from {}; end the name with .md, .html, .csv or .json",
+                path.display()
+            )
+        })?;
+
+        if plan.iter().any(|(planned, _)| planned == path) {
+            return Err(format!("--report {} was given twice", path.display()));
+        }
+
+        if path.is_dir() {
+            return Err(format!("{} is a folder, not a file", path.display()));
+        }
+
+        if same_file(path, &args.questions) {
+            return Err(format!("--report {} would overwrite your questions file", path.display()));
+        }
+
+        if same_file(path, &args.store) {
+            return Err(format!("--report {} would overwrite your notebook", path.display()));
+        }
+
+        if path.exists() && !args.overwrite {
+            return Err(format!(
+                "the report file {} already exists; choose another name or add --overwrite",
+                path.display()
+            ));
+        }
+
+        plan.push((path.clone(), format));
+    }
+
+    Ok(plan)
 }
 
 fn report(progress: &Progress) {
@@ -186,6 +276,8 @@ fn report(progress: &Progress) {
 }
 
 async fn run(cli: RunArgs) -> Result<Outcome, Box<dyn Error>> {
+    let planned_reports = plan_reports(&cli)?;
+
     let mut defaults =
         QuestionDefaults { max_followups: cli.retries, ..QuestionDefaults::default() };
     if !cli.reject_phrases.is_empty() {
@@ -218,7 +310,8 @@ async fn run(cli: RunArgs) -> Result<Outcome, Box<dyn Error>> {
     }
 
     let engine =
-        application::run_with(questionnaire, &cli.target, &transport, store, &options).await?;
+        application::run_with(questionnaire.clone(), &cli.target, &transport, store, &options)
+            .await?;
 
     print!("{}", human::render(engine.conversation()));
 
@@ -227,6 +320,29 @@ async fn run(cli: RunArgs) -> Result<Outcome, Box<dyn Error>> {
             "the run ended early: a question failed and its on_failure policy is abort/unknown"
         );
         return Ok(Outcome::EndedEarly);
+    }
+
+    // Every question has been processed: say so, and write the requested reports.
+    let finished = Report::build(engine.conversation(), Some(&questionnaire));
+    eprintln!("{}", finished.done_note());
+
+    let mut failures = Vec::new();
+    for (path, format) in &planned_reports {
+        match write_file(path, &finished.render(*format), cli.overwrite) {
+            Ok(()) => eprintln!("Report: {}", path.display()),
+            Err(error) => failures.push(error),
+        }
+    }
+
+    if !failures.is_empty() {
+        return Err(format!(
+            "the run finished and is saved in {}, but a report could not be written: {}. \
+             You can make it later with: chatterg report --store {}",
+            cli.store.display(),
+            failures.join("; "),
+            cli.store.display()
+        )
+        .into());
     }
 
     Ok(Outcome::Completed)
@@ -258,16 +374,7 @@ async fn make_report(args: ReportArgs) -> Result<Outcome, Box<dyn Error>> {
 
     match &args.out {
         Some(path) => {
-            if path.exists() && !args.overwrite {
-                return Err(format!(
-                    "{} already exists; choose another name or add --overwrite",
-                    path.display()
-                )
-                .into());
-            }
-
-            std::fs::write(path, text)
-                .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+            write_file(path, &text, args.overwrite)?;
             eprintln!("wrote {}", path.display());
         }
         None => print!("{text}"),

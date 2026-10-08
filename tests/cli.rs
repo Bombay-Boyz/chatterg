@@ -709,3 +709,300 @@ mod report_command {
             .stderr(predicate::str::contains("does not contain a run yet"));
     }
 }
+
+// ---- automatic reports (--report) --------------------------------------------------
+
+mod auto_report {
+    use super::{chatterg, json, predicate};
+    use mockito::{Mock, Server, ServerGuard};
+    use predicates::prelude::PredicateBooleanExt;
+    use std::path::{Path, PathBuf};
+
+    async fn agent(server: &mut ServerGuard, text: &str, hits: usize) -> (Mock, Mock) {
+        let rpc_url = format!("{}/rpc", server.url());
+
+        let card = server
+            .mock("GET", "/.well-known/agent-card.json")
+            .with_status(200)
+            .with_body(
+                json!({"name": "Mock Agent", "supportedInterfaces": [
+                    {"url": rpc_url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
+                ]})
+                .to_string(),
+            )
+            .create_async()
+            .await;
+
+        let rpc = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(
+                json!({"jsonrpc": "2.0", "id": 1, "result": {"message": {"parts": [
+                    {"kind": "text", "text": text}]}}})
+                .to_string(),
+            )
+            .expect(hits)
+            .create_async()
+            .await;
+
+        (card, rpc)
+    }
+
+    fn write(dir: &Path, name: &str, body: &str) -> PathBuf {
+        let path = dir.join(name);
+        std::fs::write(&path, body).unwrap();
+        path
+    }
+
+    fn run(server: &ServerGuard, questions: &Path, dir: &Path) -> assert_cmd::Command {
+        let mut command = chatterg();
+        command
+            .arg(server.url())
+            .arg(questions)
+            .args(["--cooldown", "0", "--max-waits", "0", "--store"])
+            .arg(dir.join("c.db"));
+        command
+    }
+
+    #[tokio::test]
+    async fn a_finished_run_always_prints_the_done_note() {
+        let mut server = Server::new_async().await;
+        let _agent = agent(&mut server, "Acme", 2).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\nTwo?\n");
+
+        run(&server, &questions, dir.path())
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Done: 2 questions"))
+            .stderr(predicate::str::contains("2 answered"));
+    }
+
+    #[tokio::test]
+    async fn reports_are_written_in_the_format_of_their_file_ending_with_sections() {
+        let mut server = Server::new_async().await;
+        let _agent = agent(&mut server, "<b>Acme</b>", 2).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "## Basics\nOne?\n## More\nTwo?\n");
+        let md = dir.path().join("out.md");
+        let html = dir.path().join("out.html");
+
+        run(&server, &questions, dir.path())
+            .arg("--report")
+            .arg(&md)
+            .arg("--report")
+            .arg(&html)
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Report:"))
+            .stderr(predicate::str::contains("out.md"))
+            .stderr(predicate::str::contains("out.html"));
+
+        let md_text = std::fs::read_to_string(&md).unwrap();
+        assert!(md_text.contains("# Questionnaire report"));
+        assert!(
+            md_text.contains("### Basics") && md_text.contains("### More"),
+            "sections must come from the questions file"
+        );
+
+        let html_text = std::fs::read_to_string(&html).unwrap();
+        assert!(html_text.starts_with("<!doctype html>"));
+        assert!(html_text.contains("&lt;b&gt;Acme&lt;/b&gt;"));
+    }
+
+    #[tokio::test]
+    async fn missing_folders_are_created() {
+        let mut server = Server::new_async().await;
+        let _agent = agent(&mut server, "Acme", 1).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\n");
+        let report = dir.path().join("reports").join("2026").join("r.csv");
+
+        run(&server, &questions, dir.path()).arg("--report").arg(&report).assert().success();
+
+        assert!(std::fs::read_to_string(&report).unwrap().starts_with("id,section,question"));
+    }
+
+    #[tokio::test]
+    async fn a_bad_report_name_is_refused_before_anything_is_asked() {
+        let mut server = Server::new_async().await;
+        let (_card, rpc) = agent(&mut server, "Acme", 0).await; // the agent must not be called
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\n");
+
+        run(&server, &questions, dir.path())
+            .args(["--report", "notes.txt"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("cannot tell the report format"));
+
+        rpc.assert_async().await;
+        assert!(!dir.path().join("c.db").exists(), "not even the notebook may be created");
+    }
+
+    #[tokio::test]
+    async fn an_existing_report_file_is_refused_up_front_unless_overwrite_is_given() {
+        let mut server = Server::new_async().await;
+        let (_card, rpc) = agent(&mut server, "Acme", 1).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\n");
+        let report = write(dir.path(), "r.md", "precious");
+
+        run(&server, &questions, dir.path())
+            .arg("--report")
+            .arg(&report)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("already exists"));
+        assert_eq!(std::fs::read_to_string(&report).unwrap(), "precious");
+
+        run(&server, &questions, dir.path())
+            .arg("--report")
+            .arg(&report)
+            .arg("--overwrite")
+            .assert()
+            .success();
+        assert!(std::fs::read_to_string(&report).unwrap().contains("# Questionnaire report"));
+
+        rpc.assert_async().await; // only the second command asked anything
+    }
+
+    #[tokio::test]
+    async fn a_report_may_never_replace_the_questions_file_or_the_notebook() {
+        let mut server = Server::new_async().await;
+        let (_card, rpc) = agent(&mut server, "Acme", 0).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "questions.md", "One?\n");
+
+        run(&server, &questions, dir.path())
+            .arg("--report")
+            .arg(&questions)
+            .arg("--overwrite")
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("would overwrite your questions file"));
+        assert_eq!(std::fs::read_to_string(&questions).unwrap(), "One?\n");
+
+        // the notebook is protected too (only matters once it exists)
+        std::fs::write(dir.path().join("c.db"), "").unwrap();
+        run(&server, &questions, dir.path())
+            .arg("--report")
+            .arg(dir.path().join("c.db"))
+            .arg("--overwrite")
+            .assert()
+            .code(1);
+
+        rpc.assert_async().await;
+    }
+
+    #[test]
+    fn the_same_report_twice_is_an_error() {
+        chatterg()
+            .args(["http://localhost:1", "questions.yaml", "--report", "r.md", "--report", "r.md"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("given twice"));
+    }
+
+    #[test]
+    fn overwrite_needs_a_report() {
+        chatterg()
+            .args(["http://localhost:1", "questions.yaml", "--overwrite"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("--report"));
+    }
+
+    #[tokio::test]
+    async fn a_run_that_ends_early_writes_no_report() {
+        let mut server = Server::new_async().await;
+        let _agent = agent(&mut server, "not valid", 1).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(
+            dir.path(),
+            "q.yaml",
+            "questions:\n  - {id: stage, question: Stage?, required: true, type: enum, values: [pilot]}\n",
+        );
+        let report = dir.path().join("r.md");
+
+        run(&server, &questions, dir.path())
+            .arg("--report")
+            .arg(&report)
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("Done:").not());
+
+        assert!(!report.exists());
+    }
+
+    #[tokio::test]
+    async fn a_run_that_gives_up_writes_no_report() {
+        let mut server = Server::new_async().await;
+        let rpc_url = format!("{}/rpc", server.url());
+        let _card = server
+            .mock("GET", "/.well-known/agent-card.json")
+            .with_status(200)
+            .with_body(
+                json!({"name": "M", "supportedInterfaces": [
+                    {"url": rpc_url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}]})
+                .to_string(),
+            )
+            .create_async()
+            .await;
+        let _limited = server.mock("POST", "/rpc").with_status(429).create_async().await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\n");
+        let report = dir.path().join("r.md");
+
+        run(&server, &questions, dir.path()).arg("--report").arg(&report).assert().code(3);
+
+        assert!(!report.exists());
+    }
+
+    #[tokio::test]
+    async fn if_the_report_cannot_be_written_the_run_is_still_safe_and_the_message_says_how_to_retry()
+     {
+        let mut server = Server::new_async().await;
+        let _agent = agent(&mut server, "Acme", 1).await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\n");
+        // a *file* where a folder would have to be created
+        let blocker = write(dir.path(), "blocker", "x");
+        let report = blocker.join("sub").join("r.md");
+
+        run(&server, &questions, dir.path())
+            .arg("--report")
+            .arg(&report)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("the run finished and is saved"))
+            .stderr(predicate::str::contains("chatterg report --store"));
+
+        // the advice works: the notebook holds the finished run
+        chatterg()
+            .args(["report", "--store"])
+            .arg(dir.path().join("c.db"))
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("# Questionnaire report"));
+    }
+
+    #[tokio::test]
+    async fn help_documents_the_report_switches() {
+        chatterg()
+            .arg("--help")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("--report <FILE>"))
+            .stdout(predicate::str::contains("--overwrite"));
+    }
+}

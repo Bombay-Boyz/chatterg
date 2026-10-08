@@ -125,6 +125,14 @@ While it works you will see little messages like this:
 
 That means "I'm asking question 1 of 3", and so on. 🎉
 
+When **every question has been processed**, chatterg also prints a note on the screen:
+
+```
+Done: 3 questions over 2m 10s: 3 answered.
+```
+
+(It counts questions, how long it took, how many were answered, rejected or never asked, and how many naps it took.)
+
 When it is **finished**, chatterg prints all the answers, like this:
 
 ```
@@ -189,6 +197,8 @@ chatterg <AGENT_URL> <QUESTIONS_FILE> [switches]
 | `--store <FILE>` | `chatterg.db` | **Which notebook to use.** Same notebook = carry on where you stopped. |
 | `--force-resume` | off | **Carry on even though you edited the questions file**, as long as every question already asked is unchanged. Edits to later questions, or new questions added at the end, are fine. |
 | `--restart` | off | **Start over.** Copies the old notebook entry into a backup file (`<notebook>.<date-time>.bak`) and begins again at question 1. |
+| `--report <FILE>` | none | **Write a report when the run finishes.** The kind of file comes from its ending: `.md`, `.html`, `.csv` or `.json`. Use it several times to get several. Missing folders are created. |
+| `--overwrite` | off | **Allow `--report` to replace a file that already exists.** (Without it, chatterg refuses before it starts, so you don't lose an hour first.) |
 | `--retries <N>` | `2` | **If the answer is bad, ask again this many extra times.** `2` means up to 3 tries in total. Only for plain questions (see below). |
 | `--reject-phrase <WORDS>` | a built-in list | **Words that mean "the bot is dodging."** If the answer contains one, it counts as a bad answer and chatterg asks again. You can use this switch many times. Using it **replaces** the built-in list. |
 | `--cooldown <SECONDS>` | `120` | **How long to nap** when the bot stops answering (too many questions, error, no reply). 120 seconds = 2 minutes. |
@@ -414,6 +424,27 @@ What's inside a report:
 5. **The nap log:** every time chatterg had to wait, and why.
 6. **A full transcript** of every attempt, with times.
 
+### Get the report automatically when the run finishes ⚙️
+
+Add `--report` to the normal run. When the last question is processed, chatterg writes the file for you:
+
+```bash
+./target/release/chatterg https://the-bots-address.example/agent questions.txt \
+  --store zeolite.db --report report.html --report answers.csv
+```
+
+```
+Done: 89 questions over 3h 12m 05s: 87 answered, 2 rejected. Paused 3 times for 30m 00s.
+Report: report.html
+Report: answers.csv
+```
+
+- The report **has the section headings** from your questions file automatically.
+- It is only written when the run **finishes**. If the run ends early (exit code 2) or chatterg gives up (exit code 3), no report is written. You can still ask for one by hand with `chatterg report`.
+- chatterg checks your `--report` names **before it asks anything**. If a name has no known ending, or the file already exists (and you didn't add `--overwrite`), it stops straight away. It will never replace your questions file or your notebook.
+- If the report can't be written at the end (for example, the disk is full), your run is **still saved**. chatterg tells you the `chatterg report --store ...` command to try again.
+- Running the same command again on a finished notebook asks nothing and prints the note again. With `--report` and an existing file it stops, unless you add `--overwrite`.
+
 Safety notes:
 
 - Everything the bot said is treated as **untrusted text**. In the HTML report it is escaped, so a bot can't put code in your page. In the CSV report, cells that start with `=`, `+`, `-` or `@` get a `'` in front so a spreadsheet will not run them as formulas.
@@ -499,6 +530,10 @@ chatterg tells you what happened on the screen, starting with `error:`. Here is 
 | `another chatterg is already using <file>` | A second chatterg is running on the same notebook | Wait for it to finish, or use a different `--store` |
 | `the questions file changed since this run started` | You edited the questions after starting | Read the message. Use `--force-resume` (safe edits only), `--restart`, or a new notebook |
 | `stored conversation uses format version N` | The notebook was made by a **newer** chatterg | Update chatterg |
+| `cannot tell the report format from <file>` | A `--report` name doesn't end in `.md`, `.html`, `.csv` or `.json` | Rename it |
+| `the report file <file> already exists` | `--report` would replace a file | Pick a new name, or add `--overwrite` |
+| `--report <file> would overwrite your questions file` (or notebook) | You pointed `--report` at an important file | Choose a different name |
+| `the run finished and is saved in <db>, but a report could not be written` | The run is fine, only the report file failed | Fix the folder or disk, then run the `chatterg report --store <db>` command it shows |
 | `agent still unavailable after N cooldowns` | The bot kept saying "slow down" or never answered, and chatterg ran out of naps | Wait, then run the **same** command again. Or use a bigger `--delay`, `--cooldown` or `--max-waits` |
 
 If chatterg ends but some answers say `Rejected`, that is **not** a crash. It means the bot gave answers chatterg didn't like, and chatterg moved on.
@@ -552,7 +587,7 @@ chatterg/
 - Each question is sent on its own. The bot is not told about the earlier questions.
 - One notebook holds **one** conversation.
 - It only talks to A2A bots for now.
-- It doesn't write the report **by itself** when a run finishes yet. You ask for it with `chatterg report` (automatic reports are planned).
+- It only writes a report by itself when you add `--report`. There is no default report yet, and it doesn't empty your questions file afterwards (both are planned, see the roadmap).
 
 Want to know what we plan to build next (reports, safer resume, smarter waiting, talking to more kinds of bots)? Read **[ROADMAP.md](ROADMAP.md)**.
 
@@ -584,7 +619,10 @@ echo $?
 # Start over: use a new notebook
 ./target/release/chatterg  <BOT_URL>  <QUESTIONS_FILE>  --store new_run.db
 
-# Make a report (Markdown on screen, or a file in the format of its ending)
+# Get a report automatically when the run finishes
+./target/release/chatterg  <BOT_URL>  <QUESTIONS_FILE>  --report report.html
+
+# Make a report from a notebook yourself (Markdown on screen, or a file in the format of its ending)
 ./target/release/chatterg  report  --store chatterg.db
 ./target/release/chatterg  report  --store chatterg.db  --out report.html
 

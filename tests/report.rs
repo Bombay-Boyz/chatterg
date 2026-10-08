@@ -583,3 +583,60 @@ fn the_format_is_guessed_from_the_file_extension() {
     assert_eq!(guess("r.txt"), None);
     assert_eq!(guess("noext"), None);
 }
+
+// ---- the one-line note at the end of a run -------------------------------------
+
+#[test]
+fn done_note_for_a_clean_run() {
+    let (conversation, questionnaire) = tiny();
+
+    let note = Report::build(&conversation, Some(&questionnaire)).done_note();
+
+    assert_eq!(note, "Done: 2 questions over 1h 02m 03s: 2 answered.");
+}
+
+#[test]
+fn done_note_counts_rejected_unasked_and_pauses() {
+    let questionnaire = questionnaire(&format!(
+        "questions:\n{}{}{}",
+        q("a", "A?", None),
+        q("b", "B?", None),
+        q("c", "C?", None)
+    ));
+    let conversation = Conversation {
+        state: State::Complete,
+        answers: vec![
+            record("a", vec![attempt(1, "A?", "x", ValidationStatus::Accepted, 5)]),
+            record("b", vec![attempt(1, "B?", "", ValidationStatus::Rejected, 5)]),
+        ],
+        cooldowns: vec![
+            CooldownEvent { at: t0(), reason: "429".into(), seconds: 120 },
+            CooldownEvent { at: t0(), reason: "429".into(), seconds: 120 },
+        ],
+        started_at: Some(t0()),
+        finished_at: Some(t0() + Duration::seconds(95)),
+        ..Conversation::default()
+    };
+
+    let note = Report::build(&conversation, Some(&questionnaire)).done_note();
+
+    assert_eq!(
+        note,
+        "Done: 3 questions over 1m 35s: 1 answered, 1 rejected, 1 not asked. Paused 2 times for 4m 00s."
+    );
+}
+
+#[test]
+fn done_note_uses_singular_and_skips_what_it_does_not_know() {
+    let questionnaire = questionnaire(&format!("questions:\n{}", q("a", "A?", None)));
+    let conversation = Conversation {
+        answers: vec![record("a", vec![attempt(1, "A?", "x", ValidationStatus::Accepted, 5)])],
+        cooldowns: vec![CooldownEvent { at: t0(), reason: "429".into(), seconds: 30 }],
+        ..Conversation::default()
+    };
+
+    let note = Report::build(&conversation, Some(&questionnaire)).done_note();
+
+    // no start/finish time recorded, so no "over ..."; one pause is "1 time"
+    assert_eq!(note, "Done: 1 question: 1 answered. Paused 1 time for 30s.");
+}

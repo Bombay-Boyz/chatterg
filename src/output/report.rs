@@ -227,6 +227,35 @@ impl Report {
         }
     }
 
+    /// One line saying how a finished run went, for the end of a run.
+    pub fn done_note(&self) -> String {
+        let summary = &self.summary;
+        let mut note = format!("Done: {}", plural(summary.total_questions, "question"));
+
+        if let Some(seconds) = self.run.duration_seconds {
+            note.push_str(&format!(" over {}", duration_text(seconds)));
+        }
+
+        note.push_str(&format!(": {} answered", summary.answered));
+        if summary.rejected > 0 {
+            note.push_str(&format!(", {} rejected", summary.rejected));
+        }
+        if summary.not_asked > 0 {
+            note.push_str(&format!(", {} not asked", summary.not_asked));
+        }
+        note.push('.');
+
+        if summary.cooldowns > 0 {
+            note.push_str(&format!(
+                " Paused {} for {}.",
+                plural(summary.cooldowns, "time"),
+                duration_text(summary.cooldown_seconds as i64)
+            ));
+        }
+
+        note
+    }
+
     pub fn render(&self, format: Format) -> String {
         match format {
             Format::Markdown => self.to_markdown(),
