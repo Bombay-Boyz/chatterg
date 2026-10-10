@@ -1,99 +1,804 @@
-# Zeolite membranes question set (one per line; blank lines and # comments are ignored)
+# A. Company Identity, Ownership and Legal Standing
 
-How are zeolite frameworks classified according to their pore systems?
-Why does framework dimensionality matter when choosing a zeolite for membrane service?
-How do channel intersections influence molecular transport in a zeolite?
-What distinguishes micropores from mesopores in membrane materials?
-How does zeolite crystal size influence membrane behavior?
-Why are continuous zeolite layers difficult to fabricate on porous supports?
-How does framework composition influence the separation properties of a zeolite?
-How can cation exchange alter the transport behavior of an LTA membrane?
-Why might an MFI membrane be preferable for some hydrocarbon separations?
-How do hydrophilic and hydrophobic zeolite surfaces differ at the molecular level?
+1. What is the full legal name of the entity that will contract with us?
+2. What is the company's CIN?
+3. When was Nxtbrane India Private Limited incorporated?
+4. Where is the company's registered office?
+5. Where is the company's principal operating office?
+6. What is the company's current legal status?
+7. Is the company privately held, publicly listed, or a subsidiary of another company?
+8. Who are the ultimate beneficial owners of the company?
+9. Who are the current shareholders?
+10. What percentage of the company does each shareholder own?
+11. Who are the company's directors?
+12. Who are the key promoters?
+13. Who founded Nxtbrane?
+14. What was the original business rationale for establishing Nxtbrane?
+15. Has the company changed its principal business activity since incorporation?
+16. What other companies are owned, controlled, or managed by the promoters?
+17. Are there any related-party companies involved in Nxtbrane's supply chain?
+18. Does Nxtbrane have any parent, subsidiary, affiliate, JV or technology-license entity?
+19. Which entity owns the intellectual property used by Nxtbrane?
+20. Which legal entity will bear liability under a product supply contract?
 
-How does preferential adsorption contribute to selective permeation?
-Why does molecular kinetic diameter matter even when a molecule can enter a zeolite pore?
-How does intracrystalline diffusion differ from surface diffusion?
-What is the role of concentration gradients in zeolite membrane transport?
-How can competitive adsorption change the ranking of permeating species?
-Why can membrane selectivity decrease when the feed contains several components?
-How does fugacity become relevant when membrane feeds operate at elevated pressure?
-What effect can pressure-driven adsorption have on zeolite membrane flux?
-How can temperature alter both adsorption and diffusion simultaneously?
-Why might increasing temperature improve flux while reducing separation?
+# B. Promoters, Management and Key People
 
-How does water vapor influence the transport of nonpolar gases through zeolites?
-Why can framework defects create an apparent separation mechanism unrelated to molecular sieving?
-How should permeance be normalized when comparing membranes with different active-layer thicknesses?
-What is the practical meaning of a membrane separation factor measured under mixed-feed conditions?
-Why is ideal selectivity insufficient for predicting industrial membrane performance?
-How can partial pressure differences be incorporated into a permeation analysis?
-What measurements are required to calculate component flux reliably?
-Why should feed-side and permeate-side compositions both be reported in membrane studies?
-How can uncertainty in permeance and selectivity be quantified experimentally?
-What controls are needed to rule out leaks in a zeolite membrane test cell?
+21. Who is the CEO/Managing Director?
+22. Who is responsible for sales?
+23. Who is responsible for technical sales?
+24. Who is responsible for membrane engineering?
+25. Who heads zeolite R&D?
+26. Who heads molecular-sieve/bead production?
+27. Who is responsible for quality assurance?
+28. Who is responsible for quality control?
+29. Who is responsible for manufacturing?
+30. Who is responsible for procurement?
+31. Who is responsible for customer service?
+32. Who will be our primary commercial contact?
+33. Who will be our primary technical contact?
+34. Who will have authority to resolve quality disputes?
+35. Who has authority to approve commercial concessions?
+36. Which members of the technical team are full-time employees?
+37. Which technical experts are consultants or advisors?
+38. What proportion of the technical team has direct industrial zeolite experience?
+39. How many employees does the company currently have?
+40. What happens to customer support if a key technical person leaves?
 
-How can membrane area be determined accurately for permeation calculations?
-What role does support resistance play in the measured performance of a composite membrane?
-How can researchers distinguish membrane resistance from support resistance?
-What synthesis variables most strongly influence zeolite nucleation on a support?
-How does seed-crystal loading affect the continuity of a secondary-growth layer?
-What properties should a good zeolite seed layer possess?
-How can synthesis time change crystal intergrowth and membrane thickness?
-How does alkalinity influence zeolite crystallization during membrane preparation?
-Why can synthesis temperature alter both phase purity and defect formation?
-How does support surface chemistry influence adhesion of zeolite crystals?
+# C. Management Track Record
 
-Why can asymmetric supports be useful for high-permeance zeolite membranes?
-What problems arise when the zeolite layer grows too thick?
-How can membrane synthesis be designed to minimize batch-to-batch variability?
-What causes cracks to form during drying or calcination of zeolite membranes?
-How can thermal expansion mismatch damage a zeolite-support composite?
-What is the significance of non-zeolitic leakage in a membrane characterization experiment?
-How can permporometry help identify defects in a microporous membrane?
-How can gas-pair testing reveal whether transport is occurring through pinholes?
-Why is helium sometimes useful when diagnosing membrane defects?
-How can defect sealing change the apparent permeance and selectivity?
+41. What previous companies have the promoters founded or managed?
+42. What manufacturing experience do the promoters have?
+43. What specialty-chemical experience do they have?
+44. What membrane-industry experience does management have?
+45. What experience do the promoters have in scaling laboratory technologies?
+46. What experience do they have with industrial procurement?
+47. What experience do they have with multinational customers?
+48. What experience do they have with EPC companies?
+49. What experience do they have with chemical-plant commissioning?
+50. What experience do they have with after-sales service?
+51. What previous products have the promoters commercialized?
+52. Which members of management have taken a technology from TRL 3–4 to commercial deployment?
+53. What was the largest manufacturing operation previously managed by the promoters?
+54. What major industrial failures have management experienced and what was learned?
+55. Who ultimately owns the commercial responsibility for Nxtbrane?
 
-What microscopic evidence can demonstrate continuous crystal intergrowth across a membrane?
-How can grain orientation affect transport through an anisotropic zeolite layer?
-Why can grain boundaries either hinder or facilitate molecular transport?
-How can membrane morphology be correlated with permeation data?
-What does an XRD pattern reveal about phase composition in a synthesized membrane?
-How can SEM distinguish a thin continuous layer from isolated zeolite crystals?
-When would cross-sectional imaging be more informative than surface imaging?
-What information can elemental mapping provide about a zeolite membrane?
-How can thermal analysis help determine whether residual template remains in a membrane?
-Why should membrane characterization combine structural and transport measurements?
+# D. Company History and Strategy
 
-How can adsorption measurements complement permeation experiments?
-Why are binary and multicomponent feeds more informative than pure-gas tests?
-How can humidity alter apparent gas selectivity in a zeolite membrane?
-What types of molecular pairs are especially challenging for zeolite molecular sieving?
-Why can CO2 and CH4 exhibit different adsorption behavior despite both being small molecules?
-What zeolite properties are relevant to separating hydrogen from carbon dioxide?
-How might zeolite membranes contribute to natural-gas upgrading?
-What makes hydrocarbon isomer separation particularly demanding for membrane materials?
-How can zeolite membranes be applied to remove water from gases?
-What characteristics make a zeolite suitable for alcohol dehydration by pervaporation?
+56. What was Nxtbrane's original business model?
+57. How has that business model changed?
+58. What percentage of the business is currently R&D?
+59. What percentage is currently commercial sales?
+60. What percentage comes from beads or molecular sieves?
+61. What percentage comes from membranes?
+62. What percentage comes from consulting or technology development?
+63. What are the company's three largest current revenue streams?
+64. What are the company's principal target industries?
+65. Which products are commercially available today?
+66. Which products remain at pilot stage?
+67. Which products remain at laboratory or R&D stage?
+68. What is the company's five-year commercial strategy?
+69. Is Nxtbrane primarily a product company, technology company, licensing company, or engineering company?
+70. What would management consider Nxtbrane's principal competitive advantage?
 
-How does the permeate vapor pressure influence pervaporation driving force?
-How does solvent adsorption affect the flux of water through a hydrophilic zeolite?
-What happens when strongly adsorbing organic components block hydrophilic transport pathways?
-How does membrane lifetime affect the economics of an industrial separation process?
-Why is module packing density important for the commercial viability of inorganic membranes?
-What engineering problems arise when many membrane elements are connected in parallel?
-What strategies can be used to protect zeolite membranes from mechanical shock?
-How should a membrane cleaning protocol be designed without damaging the active layer?
-What types of fouling can occur on zeolite membrane surfaces?
-What operating data are needed to establish reliable long-term membrane durability?
+# E. Financial Strength and Continuity Risk
 
-How should accelerated aging experiments be interpreted for zeolite membranes?
-What constitutes an acceptable performance loss during extended operation?
-What are the main barriers between a successful membrane experiment and a commercial product?
-How does manufacturing yield affect the economics of zeolite membrane production?
-Why can reproducibility be more important than record permeance during scale-up?
-What pilot-scale evidence would strengthen a claim that a zeolite membrane is industrially viable?
-How should lifecycle energy consumption be compared between membrane and distillation routes?
-What capital-cost factors dominate an industrial zeolite membrane installation?
-What process integration opportunities could make inorganic membranes more attractive?
+71. What was Nxtbrane's revenue for each of the last five financial years?
+72. What was EBITDA for each of those years?
+73. What was net profit/loss for each year?
+74. What was operating cash flow?
+75. What is the company's current cash position?
+76. What is the company's current working-capital requirement?
+77. What are its outstanding borrowings?
+78. Does the company have any secured debt?
+79. Does it have any unsecured debt?
+80. Does it have any overdue statutory liabilities?
+81. Does it have any outstanding GST liabilities?
+82. Does it have any outstanding income-tax liabilities?
+83. Does it have any contingent liabilities?
+84. Has the company ever defaulted on a bank facility?
+85. Has any lender classified an account as stressed or irregular?
+86. What is the company's current annual burn rate?
+87. How many months of cash runway does the company have?
+88. What funding has the company received?
+89. Who are the investors?
+90. How much external capital has been raised?
+91. At what valuation was the last investment made?
+92. Is additional funding currently being raised?
+93. What happens to customer supply commitments if additional funding is delayed?
+94. What is the company's minimum viable cash requirement?
+95. Can the company provide audited financial statements for the last three years?
+
+# F. Government Recognition, Grants and Incentives
+
+96. Is Nxtbrane recognised by DPIIT as a startup?
+97. What is the DPIIT recognition number?
+98. What date was recognition granted?
+99. Under which startup category is the company recognised?
+100. Has Nxtbrane received any government grant?
+101. Has it received any central-government funding?
+102. Has it received any Maharashtra-government funding?
+103. Has it received any subsidy?
+104. Has it received any tax concession?
+105. Has it received any capital subsidy?
+106. Has it received any R&D incentive?
+107. Has it received any technology-development grant?
+108. Has it received any MSME-linked benefit?
+109. Has it received any support from a government laboratory?
+110. Has it received any support from CSIR?
+111. Has it received any support from IITs or ICT?
+112. Has it received any support from petroleum-sector agencies?
+113. Has it received any support under clean-energy programmes?
+114. Has any government agency purchased or evaluated its technology?
+115. Are there any government conditions attached to grants, patents or technology licences?
+
+# G. Locations and Physical Infrastructure
+
+116. Where is Nxtbrane's registered office?
+117. Where is its R&D laboratory?
+118. Where is its membrane manufacturing facility?
+119. Where are zeolite beads manufactured?
+120. Where is powder production performed?
+121. Where is membrane coating performed?
+122. Where is calcination performed?
+123. Where is membrane testing performed?
+124. Which activities are performed in-house?
+125. Which activities are outsourced?
+126. What is the address of every manufacturing site?
+127. Which facilities are owned?
+128. Which facilities are leased?
+129. How large is each facility?
+130. What is the current manufacturing area?
+131. What is the planned manufacturing area?
+132. Can customers conduct an on-site audit?
+133. Can customers inspect the production line before placing an order?
+134. Does the company maintain dedicated production areas?
+135. What environmental and safety approvals apply to each facility?
+
+# H. Manufacturing Capability and Capacity
+
+136. What is the current annual production capacity for zeolite powder?
+137. What is the current annual production capacity for beads?
+138. What is the current annual membrane capacity?
+139. What is the current monthly membrane capacity?
+140. What is the maximum membrane area that can currently be produced?
+141. What is the maximum membrane area per module?
+142. What is the largest membrane module manufactured to date?
+143. What is the largest commercial order fulfilled?
+144. What is the current production bottleneck?
+145. What percentage of capacity is currently utilised?
+146. What is theoretical capacity versus demonstrated capacity?
+147. What is the current production yield?
+148. What percentage of batches fail QC?
+149. What percentage requires rework?
+150. What is the typical manufacturing lead time?
+151. What is the maximum sustainable monthly output?
+152. What happens if demand suddenly increases tenfold?
+153. What equipment limits capacity?
+154. What equipment is redundant?
+155. What is the backup plan for critical equipment failure?
+156. How quickly can capacity be expanded?
+157. What capex would be required to double capacity?
+158. What is the expected capacity after the planned pilot facility?
+159. What is the expected capacity after commercial-scale deployment?
+160. What percentage of manufacturing is currently manual?
+
+# I. Zeolite Product Portfolio
+
+161. Which zeolite grades does Nxtbrane currently sell?
+162. Which framework types are commercially available?
+163. Does the company supply 3A molecular sieve?
+164. Does it supply 4A?
+165. Does it supply 5A?
+166. Does it supply 13X?
+167. Does it supply MFI?
+168. Does it supply CHA?
+169. Does it supply DDR?
+170. Does it supply SSZ-13?
+171. Which grades are actually manufactured rather than purchased?
+172. Which grades are imported?
+173. Which grades are sourced from third parties?
+174. What purity specifications apply to each grade?
+175. What Si/Al ratios are available?
+176. What cation forms are available?
+177. Can the product be supplied in customised formulations?
+178. Can pore size be customised?
+179. Can crystal size be customised?
+180. Can particle size be customised?
+181. Can binder chemistry be customised?
+182. Can customers request different bead dimensions?
+183. What is the minimum order quantity?
+184. What is the normal batch size?
+185. What is the shelf life?
+
+# J. Zeolite Science and Molecular Structure
+
+186. How are the company's zeolite frameworks selected for each application?
+187. What determines the pore-size specification?
+188. How is framework dimensionality considered?
+189. How do channel intersections affect molecular transport?
+190. How does crystal size affect adsorption?
+191. How does crystal size affect diffusion?
+192. How does framework composition affect selectivity?
+193. How does Si/Al ratio affect hydrophilicity?
+194. How does ion exchange modify transport?
+195. How does cation type affect adsorption?
+196. How does framework topology affect molecular sieving?
+197. How does defect density affect performance?
+198. How are framework defects quantified?
+199. How are mesopores distinguished from micropores?
+200. How is external surface area measured?
+201. How is micropore volume measured?
+202. How is pore-size distribution measured?
+203. How reproducible is the pore structure between batches?
+204. What is the typical crystal-size distribution?
+205. What is the typical particle-size distribution?
+206. How does calcination affect framework integrity?
+207. How does residual template affect adsorption?
+208. How is residual template detected?
+209. How is framework stability under water established?
+210. How is framework stability under hydrocarbons established?
+
+# K. Molecular-Sieve Beads
+
+211. What is the exact specification of the 3A beads?
+212. What is the bead diameter tolerance?
+213. What is the crush strength?
+214. What is the attrition resistance?
+215. What is the bulk density?
+216. What is the water adsorption capacity?
+217. At what temperature and pressure is adsorption capacity measured?
+218. What is the equilibrium adsorption capacity?
+219. What is the working adsorption capacity?
+220. What is the adsorption kinetics?
+221. What is the regeneration temperature?
+222. How many adsorption/regeneration cycles have been demonstrated?
+223. What is the capacity retention after 100 cycles?
+224. What is the capacity retention after 500 cycles?
+225. What is the capacity retention after 1,000 cycles?
+226. What binders are used?
+227. Does the binder block micropores?
+228. What percentage of the bead is active zeolite?
+229. What is the moisture content on delivery?
+230. How are beads packaged?
+231. How are beads protected from atmospheric moisture?
+232. How long can opened packaging remain exposed to air?
+233. How should the customer store the beads?
+234. How should spent beads be regenerated?
+235. What are the conditions under which the bead warranty becomes invalid?
+
+# L. Membrane Technology
+
+236. What zeolite frameworks are used in Nxtbrane membranes?
+237. What is the typical membrane thickness?
+238. What is the minimum demonstrated membrane thickness?
+239. What is the maximum membrane area demonstrated?
+240. What support material is used?
+241. Why was that support selected?
+242. Is the support ceramic, metallic, polymeric or composite?
+243. What is the support pore size?
+244. What is the support permeability?
+245. What is the active-layer permeability?
+246. How is the membrane deposited?
+247. Is the process seeded secondary growth, in-situ growth, coating, sol-gel or another method?
+248. What makes Nxtbrane's coating process different?
+249. How is membrane cracking prevented?
+250. How are pinholes detected?
+251. How are non-selective defects detected?
+252. How are grain boundaries controlled?
+253. How is crystal orientation controlled?
+254. How is membrane adhesion tested?
+255. How is thermal cycling tested?
+256. How is pressure cycling tested?
+257. How is chemical resistance tested?
+258. What is the maximum operating temperature?
+259. What is the maximum operating pressure?
+260. What is the expected membrane lifetime?
+261. What is the demonstrated membrane lifetime?
+
+# M. Membrane Transport and Separation Performance
+
+262. What is the permeance of each commercial membrane?
+263. In what units is permeance reported?
+264. What is the selectivity for the target molecular pair?
+265. Is the selectivity measured using pure gases or mixtures?
+266. What is the mixed-gas selectivity?
+267. What is the feed pressure?
+268. What is the permeate pressure?
+269. What is the pressure ratio?
+270. What is the feed temperature?
+271. What is the membrane area?
+272. What is the active-layer thickness?
+273. How is flux calculated?
+274. How is permeance calculated?
+275. How is separation factor calculated?
+276. How is uncertainty calculated?
+277. What is the confidence interval for reported performance?
+278. How does humidity affect performance?
+279. How does feed composition affect performance?
+280. How does pressure affect performance?
+281. How does temperature affect performance?
+282. How does membrane aging affect performance?
+283. How does competitive adsorption affect performance?
+284. What happens when one component strongly adsorbs?
+285. What happens when the feed contains contaminants?
+286. What performance has been demonstrated continuously rather than in a single laboratory run?
+
+# N. Application-Specific Performance
+
+287. What separation applications have actually been experimentally demonstrated?
+288. Which applications are commercial today?
+289. Which are pilot-scale?
+290. Which are laboratory demonstrations?
+291. What results have been obtained for CO2/CH4?
+292. What results have been obtained for H2/CO2?
+293. What results have been obtained for O2/N2?
+294. What results have been obtained for p-xylene/o-xylene?
+295. What results have been obtained for ethanol/water?
+296. What results have been obtained for butanol/water?
+297. What results have been obtained for solvent dehydration?
+298. What results have been obtained for biogas upgrading?
+299. What results have been obtained for carbon capture?
+300. What results have been obtained for VOC removal?
+301. What results have been obtained for hydrocarbon separation?
+302. What feed compositions were used?
+303. What contaminants were present?
+304. What recovery was achieved?
+305. What product purity was achieved?
+306. What methane slip was observed?
+307. What energy consumption was measured?
+308. What membrane area was required?
+309. What membrane replacement rate was observed?
+310. What process simulation supports the claimed economics?
+311. What customer operating conditions have been replicated in the laboratory?
+312. What application has the strongest commercial evidence?
+
+# O. Testing, Laboratory Facilities and Analytical Capability
+
+313. What analytical instruments does Nxtbrane own?
+314. Does it have XRD in-house?
+315. Does it have SEM access?
+316. Does it have TEM access?
+317. Does it have AFM access?
+318. Does it have BET surface-area analysis?
+319. Does it have pore-size analysis?
+320. Does it have TGA/DSC?
+321. Does it have gas chromatography?
+322. Does it have mass spectrometry access?
+323. Does it have adsorption measurement equipment?
+324. Does it have permeation measurement equipment?
+325. Can it perform mixed-gas testing?
+326. Can it perform high-pressure testing?
+327. Can it perform humidity-controlled testing?
+328. Can it perform long-duration testing?
+329. Which tests are performed internally?
+330. Which tests are outsourced?
+331. Which laboratories are used for third-party validation?
+332. Are those laboratories accredited?
+333. What calibration standards are used?
+334. How frequently are instruments calibrated?
+335. Can raw test data be supplied to customers?
+336. Can customers witness testing?
+337. Can independent laboratories reproduce the results?
+
+# P. Quality Management and Quality Control
+
+338. Does Nxtbrane have a formal QMS?
+339. Is the QMS ISO certified?
+340. Which ISO standards apply?
+341. Who owns quality responsibility?
+342. What incoming raw-material tests are performed?
+343. What in-process tests are performed?
+344. What finished-product tests are performed?
+345. What is the batch-release procedure?
+346. Who signs the Certificate of Analysis?
+347. What parameters appear on the CoA?
+348. What are the acceptance limits?
+349. How are deviations handled?
+350. How are out-of-specification batches handled?
+351. How are customer complaints investigated?
+352. Is there a CAPA process?
+353. Is there a formal change-control process?
+354. How are manufacturing changes communicated to customers?
+355. Are retain samples maintained?
+356. How long are retain samples stored?
+357. Can a customer audit quality records?
+358. How is batch traceability maintained?
+359. Can every shipment be traced to raw-material lots?
+360. How is supplier qualification performed?
+361. How is analytical-method validation performed?
+362. What is the historical batch rejection rate?
+
+# Q. Certification, Accreditation and Regulatory Compliance
+
+363. Which ISO certifications does Nxtbrane currently hold?
+364. Who issued each certificate?
+365. What is each certificate's validity period?
+366. Can copies of the certificates be provided?
+367. Has any certification ever been suspended?
+368. Has any certification ever been withdrawn?
+369. Is the testing laboratory ISO/IEC 17025 accredited?
+370. Are products compliant with applicable BIS requirements?
+371. Are products compliant with applicable chemical regulations?
+372. Are SDS documents available?
+373. Are technical datasheets available?
+374. Are certificates of analysis supplied with every batch?
+375. Are REACH requirements relevant to exported products?
+376. Are RoHS requirements relevant to any products?
+377. Are hazardous-material classifications applicable?
+378. What environmental approvals apply to production?
+379. What factory licences are held?
+380. What pollution-control permissions are held?
+381. What fire and safety approvals are held?
+382. Are there any pending regulatory notices?
+
+# R. Intellectual Property and Technology Ownership
+
+383. Who owns the membrane technology?
+384. What patents have been filed?
+385. What patents have been granted?
+386. In which countries are patents protected?
+387. What is the patent number for the core technology?
+388. Is the technology exclusively owned or licensed?
+389. Who is the licensor?
+390. What are the licence conditions?
+391. Is the licence exclusive?
+392. What geographic restrictions apply?
+393. What fields of use are restricted?
+394. Can the technology be sublicensed?
+395. Can the licence be revoked?
+396. Does the licence survive a change of control?
+397. Are there third-party IP claims?
+398. Has Nxtbrane ever been involved in patent litigation?
+399. Does the technology depend on university IP?
+400. Does it depend on government-owned IP?
+401. Can the customer receive freedom-to-operate assurance?
+402. Who bears the cost of defending an IP infringement claim?
+
+# S. Customers, References and Commercial Track Record
+
+403. Who are Nxtbrane's current customers?
+404. Which customers have purchased products commercially?
+405. Which customers have only conducted trials?
+406. Which customers have signed pilot agreements?
+407. Which customers have issued purchase orders?
+408. Which customers have completed qualification?
+409. Which customers have repeat-purchased?
+410. What is the largest customer by revenue?
+411. What percentage of revenue comes from the largest customer?
+412. What percentage comes from the top five customers?
+413. How many active customers does the company have?
+414. How many customers have discontinued testing?
+415. Why did discontinued customers stop?
+416. Can Nxtbrane provide customer references?
+417. Can we speak directly with an existing customer?
+418. Can we visit an installation?
+419. Can we inspect a customer's operating data?
+420. What customer testimonials are available?
+421. Which testimonials represent actual commercial installations?
+422. Which testimonials represent laboratory trials?
+423. Can anonymised purchase orders be shown?
+424. Can anonymised CoAs from commercial shipments be shown?
+425. What is the repeat-order rate?
+426. What percentage of pilots convert to commercial sales?
+427. How long does customer qualification normally take?
+
+# T. Samples, Evaluation and Qualification
+
+428. Can Nxtbrane provide samples?
+429. Are samples free?
+430. What sample quantities are available?
+431. What is the sample lead time?
+432. Can the customer specify a test protocol?
+433. Can Nxtbrane provide samples from multiple production batches?
+434. Can the customer test blind samples?
+435. Can the customer send samples to an independent laboratory?
+436. Can Nxtbrane provide samples from commercial-scale production?
+437. Are laboratory samples representative of commercial material?
+438. What differences exist between laboratory and production material?
+439. What minimum qualification testing does Nxtbrane recommend?
+440. What customer-side equipment is required for testing?
+441. How long should a qualification test run?
+442. What performance should be expected during qualification?
+443. What constitutes a failed qualification?
+444. What happens if the sample passes but production material fails?
+445. Will Nxtbrane replace failed qualification samples?
+446. Who pays for qualification testing?
+447. Will Nxtbrane provide technical personnel during qualification?
+
+# U. Pricing, Quotations and Commercial Terms
+
+448. What is the current price of each product?
+449. Is pricing quoted per kilogram, tonne, square metre, module or project?
+450. What is the minimum order quantity?
+451. What is the price for a trial order?
+452. What is the price for 100 kg?
+453. What is the price for one tonne?
+454. What is the price for ten tonnes?
+455. What is the price for annual contracts?
+456. What bulk-order discount is available?
+457. What volume commitment is required for the discount?
+458. Are prices fixed for the contract period?
+459. What price-escalation mechanism applies?
+460. Is pricing linked to raw-material costs?
+461. Are freight charges included?
+462. Are taxes included?
+463. Are installation costs included?
+464. Are commissioning costs included?
+465. Are engineering fees included?
+466. What payment terms are available?
+467. Is credit available?
+468. What credit limit can Nxtbrane offer?
+469. What advance payment is required?
+470. What milestone payments apply?
+471. What late-delivery penalties are accepted?
+472. What commercial concessions are available for strategic customers?
+
+# V. Contract, Warranty, Liability and Risk Allocation
+
+473. What product warranty does Nxtbrane provide?
+474. What is the warranty period?
+475. What performance parameters are warranted?
+476. Is minimum permeance warranted?
+477. Is minimum selectivity warranted?
+478. Is adsorption capacity warranted?
+479. Is mechanical strength warranted?
+480. Is product lifetime warranted?
+481. What constitutes a warranty failure?
+482. How is warranty performance measured?
+483. Who performs the measurement?
+484. Can an independent laboratory determine warranty failure?
+485. What remedy applies to defective material?
+486. Is replacement provided?
+487. Is refund available?
+488. Does Nxtbrane cover installation costs associated with replacement?
+489. Does Nxtbrane cover consequential losses?
+490. Is there a liability cap?
+491. What exclusions apply?
+492. Is business interruption excluded?
+493. Is lost-production liability excluded?
+494. Is product liability insurance maintained?
+495. What insurance coverage does Nxtbrane carry?
+496. What happens if the supplier becomes insolvent during a project?
+497. What happens to warranty obligations after company restructuring?
+
+# W. Supply Chain, Raw Materials and Logistics
+
+498. Where are the raw materials sourced?
+499. Which raw materials are single-sourced?
+500. Which suppliers are critical?
+501. Are any raw materials imported?
+502. What percentage of raw materials are imported?
+503. What is the normal procurement lead time?
+504. What happens if a critical supplier fails?
+505. Are alternative suppliers qualified?
+506. Are raw materials batch-tested?
+507. How is raw-material quality variation controlled?
+508. How are products packaged?
+509. How are moisture-sensitive products transported?
+510. What transport conditions are required?
+511. What is the normal delivery lead time?
+512. What is the on-time delivery rate?
+513. What is the historical order-cancellation rate?
+514. What happens during raw-material shortages?
+515. Does Nxtbrane maintain safety stock?
+516. How many months of critical raw materials are held?
+517. What is the business-continuity plan?
+
+# X. Environmental, Health and Safety
+
+518. What environmental impacts arise from production?
+519. What waste streams are generated?
+520. How are chemical wastes disposed of?
+521. What emissions are generated?
+522. What wastewater is generated?
+523. How are workers protected from chemical exposure?
+524. What PPE is mandatory?
+525. What safety training is provided?
+526. What is the company's accident history?
+527. Has there been any reportable industrial accident?
+528. Are hazardous chemicals stored on site?
+529. What emergency procedures exist?
+530. Are fire drills conducted?
+531. What environmental audits have been performed?
+532. Can the customer review relevant EHS documentation?
+
+# Y. Scale-Up and Industrialisation
+
+533. What is the current technology readiness level of each product?
+534. Which products have reached pilot scale?
+535. Which products have reached commercial scale?
+536. What is the largest continuous operating test completed?
+537. What is the longest continuous membrane test completed?
+538. What is the longest bead-cycle test completed?
+539. What scale-up assumptions have been validated?
+540. Which laboratory parameters change during scale-up?
+541. What production problems appeared during scale-up?
+542. How is membrane uniformity maintained over larger areas?
+543. How does membrane thickness vary across a module?
+544. How does selectivity vary across a production batch?
+545. How does flux vary across a production batch?
+546. What is the expected manufacturing yield at commercial scale?
+547. What is the expected scrap rate?
+548. What capital equipment is required for scale-up?
+549. Who will finance that equipment?
+550. What is the expected commercial production date?
+551. What milestones must be achieved before commercial production?
+552. What assumptions could cause the scale-up schedule to slip?
+
+# Z. Pilot Plants and Field Validation
+
+553. What pilot plants are currently operating?
+554. Where are they located?
+555. Who owns them?
+556. Who operates them?
+557. What feed streams are being treated?
+558. What capacity does each pilot handle?
+559. How long has each pilot operated?
+560. What performance has been achieved?
+561. What degradation has been observed?
+562. What maintenance has been required?
+563. How often are membranes replaced?
+564. How often are beads regenerated?
+565. What unexpected problems have occurred?
+566. What modifications were made after field testing?
+567. What independent party has validated the results?
+568. What data can be shared?
+569. Can customers visit the pilot?
+570. Can customers witness a live run?
+571. What is the next scale-up milestone?
+572. What constitutes successful completion of the pilot?
+
+# AA. Biogas / Bio-CNG
+
+573. What CO2/CH4 separation performance has been demonstrated?
+574. What methane recovery has been achieved?
+575. What methane slip has been measured?
+576. What H2S concentration can the membrane tolerate?
+577. What water content can the membrane tolerate?
+578. What ammonia concentration can it tolerate?
+579. Does the feed require pretreatment?
+580. What pretreatment is required?
+581. What membrane area is required per Nm3/h of biogas?
+582. What pressure is required?
+583. What compression energy is required?
+584. What product methane purity can be achieved?
+585. What CO2 purity can be achieved?
+586. How many stages are required?
+587. What is the expected membrane lifetime in biogas service?
+
+# AB. Hydrocarbon and Petrochemical Applications
+
+588. What hydrocarbon separations have actually been demonstrated?
+589. What MFI membrane performance has been achieved?
+590. What p-xylene/o-xylene separation factor has been demonstrated?
+591. What feed composition was used?
+592. What operating temperature was used?
+593. What operating pressure was used?
+594. What membrane lifetime was demonstrated?
+595. How does the membrane behave in the presence of heavy hydrocarbons?
+596. How does coke formation affect performance?
+597. How is the membrane regenerated?
+598. How many regeneration cycles are possible?
+599. What is the energy requirement for regeneration?
+600. What happens if the feed contains sulfur compounds?
+601. What happens if the feed contains water?
+602. What is the commercial cost advantage over conventional separation?
+
+# AC. Pervaporation and Liquid Separations
+
+603. Which pervaporation applications have been demonstrated?
+604. What ethanol/water separation performance has been achieved?
+605. What butanol/water performance has been achieved?
+606. What water flux is achieved?
+607. What separation factor is achieved?
+608. What feed temperature is required?
+609. What vacuum level is required?
+610. How is permeate vapor pressure accounted for?
+611. How does solvent adsorption affect flux?
+612. How does membrane swelling or degradation occur?
+613. What happens with multicomponent feeds?
+614. How is membrane fouling handled?
+615. How is the membrane cleaned?
+616. How many cleaning cycles has it survived?
+617. What lifetime has been demonstrated?
+
+# AD. Customer Support and Technical Service
+
+618. Who provides commissioning support?
+619. Is technical support included in the product price?
+620. Is on-site support available?
+621. What is the response time for technical problems?
+622. Is 24×7 support available?
+623. Is remote monitoring available?
+624. Can Nxtbrane train customer operators?
+625. What documentation accompanies the equipment?
+626. Are operating manuals supplied?
+627. Are maintenance manuals supplied?
+628. Are troubleshooting procedures supplied?
+629. Are spare parts available?
+630. How long will spare parts remain available?
+631. What is the escalation process for unresolved problems?
+632. Who is ultimately accountable for project performance?
+
+# AE. Commercial Viability and Customer Economics
+
+633. What is the customer's expected payback period?
+634. What is the estimated CAPEX per unit of separation capacity?
+635. What is the estimated OPEX?
+636. What is the membrane replacement cost?
+637. What is the annual maintenance cost?
+638. What is the energy consumption?
+639. What is the expected energy saving versus the incumbent technology?
+640. What is the expected chemical saving?
+641. What is the expected water saving?
+642. What is the expected carbon reduction?
+643. What assumptions underpin the economic model?
+644. Which assumptions are experimentally validated?
+645. Which assumptions are estimates?
+646. What happens if membrane life is half the projected life?
+647. What happens if permeance is 50% below target?
+648. What happens if feed composition changes?
+649. What happens if energy prices double?
+650. What happens if membrane replacement costs increase?
+651. What is the sensitivity of project economics to membrane lifetime?
+652. Can Nxtbrane provide a bankable techno-economic model?
+
+# AF. Competitors and Alternatives
+
+653. Who are Nxtbrane's principal competitors?
+654. Which companies produce comparable zeolite membranes?
+655. Which companies produce comparable molecular sieves?
+656. What does Nxtbrane do better than those suppliers?
+657. What does Nxtbrane do worse?
+658. Where is Nxtbrane's technology demonstrably superior?
+659. Where is conventional adsorption superior?
+660. Where are polymer membranes superior?
+661. Where is distillation superior?
+662. Where are inorganic membranes inferior?
+663. What independent benchmark has been performed?
+664. Has a customer compared Nxtbrane against another supplier?
+665. What were the results?
+666. What is Nxtbrane's strongest defensible competitive advantage?
+667. How easily could a competitor reproduce the technology?
+
+# AG. Red-Team / Uncomfortable Questions
+
+668. What is the biggest technical weakness of Nxtbrane's technology?
+669. What is the biggest commercial weakness?
+670. Which product currently cannot be manufactured economically?
+671. Which performance claim has the least independent validation?
+672. Which customer application has failed?
+673. Why did it fail?
+674. Which pilot has underperformed expectations?
+675. What is the largest discrepancy between laboratory and field results?
+676. What is the largest production-quality problem encountered?
+677. What is the worst membrane failure experienced?
+678. What is the shortest observed membrane lifetime?
+679. What is the lowest observed selectivity?
+680. What is the lowest observed permeance?
+681. What assumption in Nxtbrane's business plan is most uncertain?
+682. What assumption in the technology roadmap is most uncertain?
+683. What happens if the planned pilot plant is delayed?
+684. What happens if funding is delayed?
+685. What happens if a key patent is challenged?
+686. What happens if the founder leaves?
+687. Why should a customer choose Nxtbrane instead of an established multinational supplier?
+
+# AH. Documentation and Evidence Package
+
+688. Can Nxtbrane provide its latest audited financial statements?
+689. Can it provide its latest MCA filings?
+690. Can it provide its incorporation documents?
+691. Can it provide its GST certificate?
+692. Can it provide its PAN?
+693. Can it provide its startup-recognition certificate?
+694. Can it provide its ISO certificates?
+695. Can it provide its product datasheets?
+696. Can it provide representative CoAs?
+697. Can it provide SDS documents?
+698. Can it provide test reports?
+699. Can it provide independent validation reports?
+700. Can it provide patent documents?
+701. Can it provide technology-licence agreements relevant to the proposed product?
+702. Can it provide customer references and evidence of commercial deployment?
+
