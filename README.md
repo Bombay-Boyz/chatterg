@@ -59,6 +59,16 @@ This makes the program. It lives here: `target/release/chatterg`
 
 > 💡 `--release` makes it fast. You only need to build again if you change the code.
 
+### Install it, so `chatterg` works from any folder
+
+```bash
+cd chatterg
+cargo install --path . --locked --force
+chatterg --version
+```
+
+`chatterg --version` tells you **which build you are running** (for example `chatterg 0.4.0`). Building or downloading new code does **not** change the installed program. After every update, run the `cargo install ...` line again, then check `chatterg --version`.
+
 ---
 
 ## The easy way: three commands 🚀
@@ -120,6 +130,20 @@ That's the whole routine. Everything else on this page is optional.
 - `add` refuses a question that is already there, and refuses text that the file would read differently (for example a line starting with `#`, `-` or `1.`).
 - `add` and `remove` only edit plain-text files. If you use a YAML question file, edit it by hand.
 
+### Stopping a run on purpose (Ctrl+C) ✋
+
+You can stop any time. Press **Ctrl+C** once:
+
+```
+Stopping: finishing the question being asked, then saving. Press Ctrl+C again to stop at once.
+Stopped after 37 of 89 questions. Your progress is saved. Run the same command again to carry on.
+```
+
+- chatterg **finishes the question it is waiting on** (so that answer is not lost), saves, and stops. If it is in a pause between questions or a nap, it stops straight away.
+- Press **Ctrl+C a second time** and it stops immediately. Everything up to the last answer is still saved.
+- If you stop it with `kill <number>` (for a run in the background), it behaves the same way as the first Ctrl+C.
+- The exit code is `130`. To carry on, run **the same command again**.
+
 ### If a run stops halfway
 
 Rate limit, power cut, closed laptop: your progress is saved. Run **the same command again** and chatterg says `Carrying on: 37 of 89 questions are already done.`, then continues. When it finishes, the folder is saved as usual.
@@ -136,8 +160,12 @@ Rate limit, power cut, closed laptop: your progress is saved. Run **the same com
 | `QUESTIONS_FILE` | `questions.txt` | Use a different question bank. |
 | `--runs-dir <FOLDER>` | `runs` | Where the dated folders are saved. |
 | `--delay <SECONDS>` | `0` | Pause between questions. Great for strict bots. |
+| `--rate <N/UNIT>` | none | Never send more than this many requests in a period, spread evenly. `30/hour` = one every 2 minutes. `10/day`, `10/minute` also work. |
 | `--cooldown <SECONDS>` | `120` | Nap length when the bot says "slow down". |
 | `--max-waits <N>` | `30` | How many naps in a row before giving up. |
+| `--max-wait <SECONDS>` | `3600` | The longest wait a bot is allowed to ask for (see "slow down" below). |
+| `--backup-every <N>` | `25` | Save a backup copy of the notebook after every N finished questions. `0` = never. |
+| `--keep-backups <N>` | `10` | How many automatic backups to keep. |
 | `--timeout <SECONDS>` | `120` | How long to wait for one answer. |
 | `--retries <N>` | `2` | Extra tries when an answer is dodgy. |
 | `--restart` | off | Put an unfinished run aside and start over. |
@@ -216,7 +244,7 @@ While it works you will see little messages like this:
 [3/3] q003
 ```
 
-That means "I'm asking question 1 of 3", and so on. 🎉
+That means "I'm asking question 1 of 3", and so on. 🎉 After a couple of questions it also shows a guess of the time left, like `[12/701] q012  (about 11h 41m left)`. It is measured from how fast this session has been going, so it improves as the run goes on.
 
 When **every question has been processed**, chatterg also prints a note on the screen:
 
@@ -297,6 +325,10 @@ chatterg <AGENT_URL> <QUESTIONS_FILE> [switches]
 | `--cooldown <SECONDS>` | `120` | **How long to nap** when the bot stops answering (too many questions, error, no reply). 120 seconds = 2 minutes. |
 | `--max-waits <N>` | `30` | **How many naps in a row before giving up.** 30 naps of 2 minutes is about 1 hour. |
 | `--delay <SECONDS>` | `0` | **A pause between questions**, so you don't ask too fast. Great for strict bots. |
+| `--rate <N/UNIT>` | none | **A speed limit.** Never send more than N requests per second, minute, hour or day, spread evenly (`30/hour` = one every 2 minutes). Retries count too. If you also use `--delay`, the longer gap wins. |
+| `--backup-every <N>` | `25` | **How often to save a backup copy** of the notebook, in finished questions. `0` turns automatic backups off. |
+| `--keep-backups <N>` | `10` | **How many automatic backups to keep.** Older ones are deleted. Your own backups and the safety copies are never deleted. |
+| `--max-wait <SECONDS>` | `3600` | **The longest wait you will let a bot ask for.** When a bot says "try again in 30 minutes", chatterg waits that long, but never more than this. Your own `--cooldown` is never cut shorter by it. |
 | `--timeout <SECONDS>` | `120` | **How long to wait for ONE answer** before saying "no reply" and taking a nap. |
 | `--rate-limit-phrase <WORDS>` | a built-in list | **Words that mean "slow down!"** in a short reply. You can use this switch many times. Using it **replaces** the built-in list. |
 | `--help` | | Shows the help message. |
@@ -354,8 +386,46 @@ When chatterg stops, it leaves a little number behind, so scripts can tell what 
 | `1` | Something went wrong: bad file, bad address, network or storage problem, or the questions file changed. |
 | `2` | The run **ended early on purpose** because a question failed and its `on_failure` was `abort` (or `unknown`). |
 | `3` | **Gave up:** the bot stayed unavailable for `--max-waits` naps in a row. Run the same command later to carry on. |
+| `130` | **You stopped it** with Ctrl+C. Progress is saved. Run the same command again to carry on. |
 
 In a terminal you can see the number with `echo $?` right after chatterg ends.
+
+---
+
+## Backups, rollbacks and rewinding 🛟
+
+chatterg writes your progress to the notebook after **every** answer, and waits for the disk to confirm it. On top of that it keeps **backup copies** while it runs.
+
+| What | How it works |
+|---|---|
+| **Automatic backups** | After every 25 finished questions, chatterg saves a complete copy of the notebook in a folder next to it called `chatterg.db.backups/`. It keeps the newest 10 and deletes older ones. Change this with `--backup-every N` (0 = never) and `--keep-backups N`. |
+| **Backup now** | `chatterg backup` makes a copy right now. It is safe **while a run is going** (it only reads). These are never deleted automatically. |
+| **See your backups** | `chatterg backups` lists them, newest first, numbered. |
+| **Go back to a backup** | `chatterg rollback` restores the newest ordinary backup. `chatterg rollback --to 3` restores number 3 from the list. |
+| **Re-ask from a question** | `chatterg rewind --to 40` forgets question 40 and everything after it, and keeps questions 1 to 39. Run the same command again and chatterg asks from 40. (`q040` also works.) |
+
+Every `rollback` and `rewind` first saves **a safety copy of what is there now**, so you can undo either one with another `rollback`. Safety copies are never deleted automatically.
+
+Things worth knowing:
+
+- `rollback` and `rewind` need the notebook to themselves. If a run is still going, they say so and change nothing. Stop it first (Ctrl+C).
+- A *finished* `chatterg run` is saved in `runs/<folder>/` and its notebook is emptied, so `rewind` is for runs that are **still going or stopped**.
+- Use `--store FILE` with any of these commands if your notebook isn't called `chatterg.db`.
+- Add `chatterg.db.backups/` and `*.damaged-*` to your `.gitignore` if your work folder is inside a Git project.
+
+### If the notebook gets damaged
+
+A power cut, a failing disk or a bad copy can break a notebook file. chatterg checks it every time it opens one:
+
+```
+error: the notebook chatterg.db is damaged (database disk image is malformed)
+
+There is a backup: auto-20261009-153012-q0037.db (taken 2026-10-09 15:30:12 UTC, after 37 questions).
+Put it back with:  chatterg rollback --store chatterg.db
+(the damaged file is moved aside, not deleted)
+```
+
+Run the command it shows. The damaged file is renamed `chatterg.db.damaged-<time>` (never deleted), the backup is restored, and you carry on with the same command as before.
 
 ---
 
@@ -390,7 +460,7 @@ Then chatterg:
    agent unavailable: agent returned a protocol error (-32003): Rate limit exceeded for this caller
    pausing 120s, then resuming (cooldown 1/30)
    ```
-2. Naps for `--cooldown` seconds.
+2. Naps for `--cooldown` seconds. **If the bot says how long to wait** (the standard `Retry-After` message, or the `RateLimit-Reset` / `X-RateLimit-Reset` ones), chatterg waits **that long instead, if it is longer** than your `--cooldown`, but never more than `--max-wait`. You will see it: `the server asks us to wait 90s`.
 3. Asks **the very same question** again. The question that was never answered is not counted or lost.
 4. If it naps `--max-waits` times in a row and the bot still won't talk, it stops with an error. Your notebook is safe: run the same command later and it continues.
 
@@ -401,6 +471,40 @@ Long, real answers that happen to mention "the rate-limiting step" are **not** m
 ### 3. A real mistake happens 🚫
 
 Things like "wrong address" (HTTP 404), "this isn't the kind of bot I know how to talk to," or a broken reply. chatterg does **not** nap for these. It stops straight away and tells you what went wrong on screen (see "Help! Something went wrong" below).
+
+---
+
+### 4. The internet (or the bot) goes down 🌐
+
+If chatterg can't reach the bot, it doesn't give up straight away and it doesn't keep hammering. It says what it thinks happened:
+
+```
+  agent unavailable: network failure: could not connect to the bot; the internet connection or the bot may be down
+  pausing 120s, then resuming (cooldown 1/30)
+  agent unavailable: ... pausing 240s ... (cooldown 2/30)
+  agent unavailable: ... pausing 480s ... (cooldown 3/30)
+  back to normal after 3 pauses (14m waiting)
+```
+
+- The **same question** is re-sent each time, so nothing is skipped or double counted.
+- While the connection keeps failing, the pauses **double** (your `--cooldown`, then twice that, and so on) up to **10 minutes**, so a long outage isn't checked every two minutes all night. A bot that is reachable but busy (a 503, a rate limit) uses your normal cooldown.
+- When the first request goes through again you get the `back to normal` line.
+- After `--max-waits` pauses in a row (default 30, roughly 4 to 5 hours of outage) chatterg stops with exit code `3`. Your progress is saved; run the same command when the connection is back.
+- If the bot **accepts the connection but never answers**, you see `the bot did not answer in time (timed out)` after `--timeout` seconds.
+
+### 5. The disk has a problem 💾
+
+If saving your progress fails (disk full, a network drive that blinked), chatterg tries again **three times** a second apart. If it still can't, it stops with:
+
+```
+error: could not save your progress after 3 tries: ... Free some disk space or check that the folder can be written to, then run the same command again. Everything saved earlier is safe.
+```
+
+Free some space and run the same command again. A backup that can't be written is only a `warning:` line; the run carries on.
+
+### 6. You close the terminal 🪟
+
+Closing the terminal window (or losing an SSH connection) is treated like pressing Ctrl+C once: the question being asked is finished and saved, then chatterg stops. It also never crashes because nobody can read its messages, and `chatterg list | head` doesn't break it. (For a run you want to leave going after you close the window, start it under `tmux` or `screen`, or with `nohup`.)
 
 ---
 
@@ -635,6 +739,13 @@ chatterg tells you what happened on the screen, starting with `error:`. Here is 
 | `the report file <file> already exists` | `--report` would replace a file | Pick a new name, or add `--overwrite` |
 | `--report <file> would overwrite your questions file` (or notebook) | You pointed `--report` at an important file | Choose a different name |
 | `the run finished and is saved in <db>, but a report could not be written` | The run is fine, only the report file failed | Fix the folder or disk, then run the `chatterg report --store <db>` command it shows |
+| `Stopped after N of M questions. Your progress is saved.` | You pressed Ctrl+C. Nothing is wrong | Run the same command again to carry on |
+| `invalid value '...' for '--rate <N/UNIT>'` | The speed limit isn't written like `30/hour` | Use a number, a slash and `second`, `minute`, `hour` or `day`: `10/minute`, `30/hour`, `100/day` |
+| `the notebook <file> is damaged` | The notebook file is broken (power cut, disk problem) | Run the `chatterg rollback --store <file>` command it shows |
+| `there are no backups for this notebook yet` | You ran `rollback` but no backup was ever made | Nothing to restore. For a damaged notebook, move it aside and start fresh |
+| `cannot rewind to question N: only questions 1 to M have been finished` | You asked to go back to a question that hasn't been asked yet | Use a number from 1 to M |
+| `another chatterg is already using <file>` (from `rollback`/`rewind`) | A run still has the notebook | Stop it (Ctrl+C), then try again |
+| `could not save your progress after 3 tries` | The disk is full or can't be written | Free space or fix the folder, then run the same command again |
 | `agent still unavailable after N cooldowns` | The bot kept saying "slow down" or never answered, and chatterg ran out of naps | Wait, then run the **same** command again. Or use a bigger `--delay`, `--cooldown` or `--max-waits` |
 
 If chatterg ends but some answers say `Rejected`, that is **not** a crash. It means the bot gave answers chatterg didn't like, and chatterg moved on.
@@ -674,6 +785,8 @@ chatterg/
 │   ├── main.rs                the front door: reads your switches
 │   ├── application.rs         the boss: asks, waits, naps, saves
 │   ├── bank.rs                your question bank: add, list, remove
+│   ├── cancel.rs              the "please stop" signal behind Ctrl+C
+│   ├── recovery.rs            backup now, rollback, rewind
 │   ├── runs.rs                saving a finished run in runs/<date>-<bot>/
 │   ├── domain/                the rules: questions, answers, checking answers
 │   ├── storage/               the notebook (SQLite): saving, locking, upgrading old notebooks
@@ -705,7 +818,15 @@ Want to know what we plan to build next (reports, safer resume, smarter waiting,
 ./target/release/chatterg  remove 3                     # remove question number 3
 ./target/release/chatterg  run  <BOT_URL>               # ask them all, save runs/<date>-<bot>/, empty the notebook
 ./target/release/chatterg  run  <BOT_URL> --delay 60    # same, politely slowly
+./target/release/chatterg  run  <BOT_URL> --rate 30/hour  # never more than 30 requests an hour
+# Ctrl+C once = finish this question, save, stop. Run the same command to carry on.
 # stopped halfway? run the SAME command again. It carries on.
+
+# Safety net
+./target/release/chatterg  backups                      # list backup copies of the notebook
+./target/release/chatterg  backup                       # make one right now
+./target/release/chatterg  rewind --to 40               # ask question 40 onwards again
+./target/release/chatterg  rollback                     # go back to the newest backup
 
 # The advanced way (you pick the files)
 # Build once

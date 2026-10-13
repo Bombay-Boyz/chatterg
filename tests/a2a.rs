@@ -313,3 +313,139 @@ async fn send_reports_network_failure() {
     let result = A2aTransport::new().send(&endpoint, message("chatterg-1", "Q")).await;
     assert!(matches!(result, Err(TransportError::Network(_))));
 }
+
+// ---- the server says how long to wait ---------------------------------------------------
+
+async fn send_with_headers(
+    status: usize,
+    headers: &[(&str, &str)],
+) -> Result<String, TransportError> {
+    let mut server = Server::new_async().await;
+    let mut mock = server.mock("POST", "/rpc").with_status(status).with_body("{}");
+    for (name, value) in headers {
+        mock = mock.with_header(*name, value);
+    }
+    let _mock = mock.create_async().await;
+
+    let endpoint = Url::parse(&format!("{}/rpc", server.url())).unwrap();
+
+    A2aTransport::new().send(&endpoint, message("chatterg-1", "Q")).await.map(|r| r.text)
+}
+
+#[tokio::test]
+async fn a_429_with_retry_after_carries_the_wait() {
+    match send_with_headers(429, &[("retry-after", "37")]).await {
+        Err(TransportError::RetryLater { status: 429, retry_after }) => {
+            assert_eq!(retry_after, std::time::Duration::from_secs(37));
+        }
+        other => panic!("expected RetryLater, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn a_503_with_a_ratelimit_header_carries_the_wait() {
+    assert!(matches!(
+        send_with_headers(503, &[("ratelimit-reset", "12")]).await,
+        Err(TransportError::RetryLater { status: 503, retry_after }) if retry_after.as_secs() == 12
+    ));
+}
+
+#[tokio::test]
+async fn the_error_text_says_how_long_the_server_asked_for() {
+    let error = send_with_headers(429, &[("retry-after", "37")]).await.unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "HTTP request failed with status 429 (the server asks us to wait 37s)"
+    );
+    assert!(error.is_transient());
+}
+
+#[tokio::test]
+async fn without_a_hint_a_429_stays_a_plain_http_error() {
+    assert!(matches!(send_with_headers(429, &[]).await, Err(TransportError::Http { status: 429 })));
+    assert!(matches!(
+        send_with_headers(429, &[("retry-after", "later")]).await,
+        Err(TransportError::Http { status: 429 })
+    ));
+}
+
+#[tokio::test]
+async fn a_hint_on_a_real_error_is_ignored() {
+    // 404 and 400 are mistakes, not "try later", whatever headers come with them
+    assert!(matches!(
+        send_with_headers(404, &[("retry-after", "30")]).await,
+        Err(TransportError::Http { status: 404 })
+    ));
+    assert!(matches!(
+        send_with_headers(400, &[("retry-after", "30")]).await,
+        Err(TransportError::Http { status: 400 })
+    ));
+}
+
+#[tokio::test]
+async fn discovery_also_carries_the_wait() {
+    let mut server = Server::new_async().await;
+    let _mock = server
+        .mock("GET", "/.well-known/agent-card.json")
+        .with_status(429)
+        .with_header("retry-after", "5")
+        .create_async()
+        .await;
+
+    let error =
+        A2aTransport::new().discover(&Url::parse(&server.url()).unwrap()).await.unwrap_err();
+
+    assert!(matches!(error, TransportError::RetryLater { status: 429, .. }));
+}
+
+// ---- the words used when the connection fails ----------------------------------------------
+
+#[tokio::test]
+async fn a_refused_connection_says_the_internet_or_the_bot_may_be_down() {
+    let endpoint = Url::parse("http://127.0.0.1:1/rpc").unwrap();
+
+    let error = A2aTransport::new().send(&endpoint, message("chatterg-1", "Q")).await.unwrap_err();
+
+    assert!(error.is_outage());
+    assert!(
+        error.to_string().contains(
+            "could not connect to the bot; the internet connection or the bot may be down"
+        ),
+        "{error}"
+    );
+}
+
+#[tokio::test]
+async fn a_bot_that_never_answers_is_reported_as_a_timeout() {
+    // accepts the connection and then says nothing
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        let mut held = Vec::new();
+        for stream in listener.incoming().flatten() {
+            held.push(stream);
+        }
+    });
+
+    let endpoint = Url::parse(&format!("http://127.0.0.1:{port}/rpc")).unwrap();
+    let transport = A2aTransport::with_timeout(std::time::Duration::from_millis(200));
+
+    let started = std::time::Instant::now();
+    let error = transport.send(&endpoint, message("chatterg-1", "Q")).await.unwrap_err();
+
+    assert!(error.is_outage());
+    assert!(error.to_string().contains("did not answer in time (timed out)"), "{error}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+}
+
+#[tokio::test]
+async fn real_errors_from_the_bot_are_not_outages() {
+    for status in [400, 404] {
+        let error = send_with_headers(status, &[]).await.unwrap_err();
+        assert!(!error.is_outage(), "{status}");
+    }
+    // 503 means "reachable but busy": transient, yet not a connection outage
+    let busy = send_with_headers(503, &[]).await.unwrap_err();
+    assert!(busy.is_transient() && !busy.is_outage());
+}

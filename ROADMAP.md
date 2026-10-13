@@ -46,10 +46,10 @@
 | **R2** ✅ | `report` command (Markdown, HTML, CSV, JSON) | High | 3 to 4 | R1 |
 | **H1** ✅ | Questions-file fingerprint on resume | High | 0.5 | R1 |
 | **H2** ✅ | Database locking, WAL, busy timeout | High | 0.5 | none |
-| **H3** | Graceful Ctrl-C and run summary | Medium | 1 | none |
+| **H3** ✅ | Graceful Ctrl-C and run summary | Medium | 1 | none |
 | **H4** ✅ | Exit codes | Medium | 0.5 | none |
-| **B1** | `Retry-After` / `RateLimit-*` support | High | 1 to 1.5 | none |
-| **B2** | Client-side rate limiter and backoff | High | 1 | B1 |
+| **B1** ✅ | `Retry-After` / `RateLimit-*` support | High | 1 to 1.5 | none |
+| **B2** ✅ | Client-side rate limiter *(steady spacing built; adaptive backoff and jitter not)* | High | 1 | B1 |
 | **F1** ✅ | Sections in the questions file | Medium | 1 | R2 for use |
 | **F2** | Run control (`--only`, `--from`, `--limit`, `--dry-run`) | Medium | 1 | none |
 | **C1** | Structured logging (`tracing`), `--verbose`, log file | Medium | 1 | none |
@@ -66,6 +66,13 @@
 | **I1** ✅ | CI, `cargo audit`, MSRV pin | Medium | 1 | none |
 | **W1** ✅ | Simpler way to feed questions (convention folder, `chatterg add`, stdin) | High | 1.5 | D1 helps |
 | **W4** ✅ | Put a finished run away (dated folder) and empty the notebook so the next run starts fresh | High | 1.5 | R2, W2 |
+| **H5** ✅ | Automatic notebook backups, `backup`, `backups` | High | 1.5 | none |
+| **H6** ✅ | `rollback` and `rewind` (each takes a safety copy first) | High | 1.5 | H5 |
+| **H7** ✅ | Damaged-notebook detection with a ready-made fix, durable writes | High | 0.5 | H5 |
+| **H8** ✅ | Internet-outage back-off, clearer network errors, save retries | High | 1 | none |
+| **H9** ✅ | Closed-terminal and broken-pipe safety, SIGHUP, `--version` | Medium | 0.5 | none |
+| **F8** | Context line per section (`@context ...`) | High | 2 | F1 |
+| **S1** | Stress-test mode for your own bots (concurrency, ramp-up, latency percentiles) | Medium | 4 to 5 | M5 |
 | **W2** ✅ | Completion note and automatic report when a run finishes | High | 1 | R2 |
 | **W3** | Archive, then clear, the questions file after a successful run (opt-in) | Medium | 1 to 1.5 | W2 |
 
@@ -162,7 +169,10 @@ Diff two runs of the same questionnaire (for example the same bot on two days, o
 
 **Acceptance tests.** Spawn two runs on one store: the second exits non-zero without touching data. Kill -9 mid-run, then resume.
 
-### H3. Graceful Ctrl-C
+### H3. Graceful Ctrl-C  ✅ *done*
+
+> **As built:** the first Ctrl+C (or, on Unix, SIGTERM from `kill`) sets a shared stop signal (`Cancel`). The question that is *in flight* is allowed to finish and is saved, so its answer is never lost. Pauses between questions, cooldown naps and waits for the next `--rate` slot all end immediately. No new request and no retry is started after the signal. The run then returns `Interrupted`; the command line prints `Stopped after 37 of 89 questions. Your progress is saved. Run the same command again to carry on.` (not as an error) and exits with **130**. A second Ctrl+C exits at once (progress up to the last answer is already saved). Tested with real signals sent to the real binary, including the pause, the in-flight and the double-signal cases. *Not built:* a Windows-specific signal test (the Ctrl+C handler is the same code on Windows, but only Unix is tested).
+
 
 **Problem.** Ctrl-C works only because state is saved after each answer. There is no confirmation and no summary, and a cooldown sleep ignores the signal until it ends.
 
@@ -172,7 +182,7 @@ Diff two runs of the same questionnaire (for example the same bot on two days, o
 
 ### H4. Exit codes  ✅ *done*
 
-> **As built:** 0, 1, 2 and 3 as listed below; they are shown in `--help`. The 130 (interrupted) code arrives with H3 (graceful Ctrl-C), which is not done yet.
+> **As built:** 0, 1, 2, 3 and 130 as listed below; they are shown in `--help`. 130 (stopped with Ctrl+C) arrived with H3.
 
 | Code | Meaning |
 |---|---|
@@ -200,13 +210,19 @@ This lets cron and CI react correctly. Document it in `--help`.
 
 The agent you tested limited by public IP, with the message "Rate limit exceeded for this caller". The right response is to behave well, not to disguise yourself. Do not build identity or IP rotation. The following make chatterg a considerate client.
 
-### B1. Honour server hints
+### B1. Honour server hints  ✅ *done*
+
+> **As built:** on a transient status (408, 425, 429, 5xx) the transport reads `Retry-After` (seconds or an HTTP date), then `RateLimit-Reset` (seconds), then `X-RateLimit-Reset` (seconds, or a Unix timestamp when the number is ten digits). A readable hint becomes `TransportError::RetryLater { status, retry_after }` (a new variant, so existing code that matches `Http { status }` is untouched); an unreadable one, or one on a real error such as 404, is ignored. The application waits `max(--cooldown, hint)`, but a *server's* wish is capped at `--max-wait` (default 1 hour); your own `--cooldown` is never shortened. The cooldown log and the on-screen message show the wait that was really used and why. *Not built:* JSON-RPC errors that carry a retry hint in their body (the NxTBrane error seen so far has none).
+
 
 On HTTP 429/503, read `Retry-After` (seconds or an HTTP date) and common headers (`RateLimit-Reset`, `X-RateLimit-Reset`, `X-RateLimit-Remaining`). Use `max(cooldown, hint)` for the wait, with a cap (`--max-cooldown`, default 1 hour). Keep the fixed cooldown as the fallback for servers that send no hint (as this one appears not to; it returned a JSON-RPC error).
 
 **Implementation.** Extend `TransportError::Http` with `retry_after: Option<Duration>`; have `with_cooldown` use it. **Effort 1 to 1.5 days.**
 
-### B2. Client-side limiter and adaptive backoff
+### B2. Client-side limiter and adaptive backoff  ✅ *done (steady spacing)*
+
+> **As built:** `--rate N/UNIT` (second, minute, hour, day; short forms accepted) sets the least gap between requests: `30/hour` is one every two minutes, evenly spaced rather than bursty. It applies to every send including retries after a cooldown, not to the one agent-card fetch. It combines with `--delay` (the longer gap wins), survives a stop and restart (the next session waits out whatever remains of the gap since the last request, using the stored send time), and a stop ends the wait at once. Progress lines also show an estimate of the time left (`about 11h 41m left`), measured from the pace of the current session. *Not built:* **adaptive backoff** (growing the gap after each cooldown and persisting it), **jitter**, and a burst-tolerant token bucket. The steady spacing was chosen first because it is predictable and never trips a limit the user already knows.
+
 
 - `--rate "30/hour"` or `--min-interval 60s`: a token bucket in the application layer, applied before every send, so you stay under the limit instead of tripping it.
 - **Adaptive:** after each cooldown, multiply the inter-question delay (say x1.5, capped), and decay it slowly after a streak of successes. Persist the learned interval in the run metadata so a restart does not forget it.
@@ -385,14 +401,48 @@ Run the same questions against a list of agent URLs sequentially (each with its 
 |---|---|---|---|
 | **M1: Trustworthy results** ✅ *done* | R1, H1, H2, H4, I1 | ~3.5 days | Safe resume, no data confusion, CI in place |
 | **M2: Report** ✅ *done* | R2, F1 | ~4.5 days | A shareable report grouped by section |
-| **M3: Polite and robust** | B1, B2, H3, C1 | ~4.5 days | Respects server limits, clean stop, logs |
-| **M4: Operator comfort** | F2, C2, D1, D2 | ~6 days | Dry-run, status, probe, config, auth |
-| **M5: Depth** | F3, R3, F6, E1 | ~10 days | Multi-run, comparison, stricter checks, richer A2A |
+| **M3: Polite and robust** *(B1, B2, H3 done; C1 logging still open)* | B1, B2, H3, C1 | ~4.5 days | Respects server limits, clean stop, logs |
+| **M4: Safe and recoverable** ✅ *done* | H5 to H9 | ~5 days | Backups, rollback, rewind, damage detection, outage handling |
+| **M5: Plan before you run** | F2, F8, C2 (`status`, `probe`) | ~5 days | Run part of the list, dry-run with time estimate, per-section context, progress from another terminal, check a bot before a long run |
+| **M6: Hands-off** | C1, W3 | ~2.5 days | Log file for unattended runs; opt-in clearing of `questions.txt` |
+| **M7: Operator comfort** | D1, D2 | ~2.5 days | Config file, authentication |
+| **M8: Depth** | F3, R3, F6, E1 | ~10 days | Multi-run, comparison, stricter checks, richer A2A |
 | **Optional** | F4, F5, F7 | ~6 days | Templating, CSV, multi-agent |
 
 M1 and M2 alone (about 8 days) turn the current tool into something you can run and present with confidence. **Both are done.**
 
 ---
+
+## 10b. Recovery and resilience (M4)  ✅ *done*
+
+> **Requested:** "handle backups, interruptions, rollbacks, internet failures etc."
+>
+> **H5 backups.** `SqliteStore::with_backups` takes a snapshot (`VACUUM INTO`, a complete consistent copy, not a file copy) after every `--backup-every` finished questions (default 25) and keeps the newest `--keep-backups` (default 10) in `<notebook>.backups/`. Names carry kind, time and position (`auto-20261009-153012-q0037.db`). Only `auto` snapshots are ever pruned; `manual` (`chatterg backup`, safe during a run because it uses a read-only connection) and `safety` copies stay. Retrying one question does not make extra snapshots. A backup that cannot be written is a `warning:` on screen, never a failed run. `chatterg backups` lists them.
+>
+> **H6 rollback and rewind.** `chatterg rollback [--to N]` restores a snapshot into the working notebook (default: the newest non-safety one) after taking a safety copy of the current state; it reads the snapshot first and changes nothing if it is empty or missing, refuses while a run holds the notebook, and moves a damaged notebook aside (never deletes it). A rollback is itself undone by rolling back to its safety copy. `chatterg rewind --to N` (or `q040`) forgets question N onwards and keeps the rest, recomputing the message counter so ids continue correctly, and also works on a finished run; impossible requests change nothing and make no safety copy.
+>
+> **H7 damage and durability.** Every open runs SQLite's `quick_check`; a file that is not a database or has broken pages is reported as *damaged* with the newest backup and the exact `rollback` command (or how to start fresh). Writes now use `synchronous = FULL`, so a power cut loses at most the answer being written.
+>
+> **H8 outages.** Network errors are told apart in words: *could not connect ... the internet or the bot may be down* versus *the bot did not answer in time (timed out)*. While the connection itself keeps failing, pauses double from `--cooldown` up to ten minutes (a cooldown you set larger is never shrunk), reset by any other kind of failure, and a `back to normal after N pauses` line appears on recovery. Saving progress is tried three times, a second apart, then stops with a clear message; nothing already saved is lost.
+>
+> **H9 safe output.** All screen output ignores write errors, so a closed terminal or `chatterg list | head` can no longer panic a run. SIGHUP (closed terminal, lost SSH) is handled like Ctrl+C. `chatterg --version` shows the build, bumped to 0.4.0 so you can tell which build is installed.
+>
+> *Not built:* automatic restore without asking (deliberately: a damaged notebook is reported and you choose), off-machine backups (copying `*.backups/` elsewhere is left to your own backup tool), verification of a snapshot against the questions file, and a `--max-offline` time limit (the `--max-waits` count is the limit).
+
+## 10c. What is planned next (requested by the maintainer)
+
+**M5: Plan before you run**
+- **F2 run control.** `--only q001-q020,q050` or `--only "section:Basics"`, `--from N`, `--limit N`, and `--dry-run`, which prints exactly what would be asked (ids, text, section) and an **estimated duration** from `--delay`/`--rate`, with no network traffic. The selection is part of the run's fingerprint, so a resumed run cannot silently change it.
+- **F8 context line.** A line `@context Nxtbrane's promoters and management team` after a `##` heading (or at the top of the file for everything) is added to every question below it when it is sent, using a template such as `Context: {context}\n{question}` (changeable with `--context-template`). Because every question is sent on its own, this removes the "it/they with no subject" problem without rewording questions. The context is part of the fingerprint and shown by `chatterg list`.
+- **C2 `status` and `probe`.** `chatterg status` (read-only, safe during a run): state, `37 of 701`, answered/rejected, time since the last request, time left, whether a run holds the notebook, number of backups. `chatterg probe <url>` fetches the agent card, shows protocols and security schemes, and with `--send "Hello"` makes exactly **one** request and prints its status and any rate-limit headers, so a long run starts from facts.
+
+**M6: Hands-off**
+- **C1 logging.** `-v` / `-vv`, `--log-file FILE` (appended, timestamped) and optional JSON lines: every request with latency and outcome, every wait with its reason, saves, backups, signals. No secrets are ever written.
+- **W3 clear the questions file (opt-in).** `--clear-questions` after a run that finished and was put away: copy the file to the run folder, re-read the copy and check its SHA-256, require that the file is unchanged since the run began, replace it atomically with a one-line comment saying where the questions went, and keep `.bak`. Never on a run that ended early or gave up.
+
+**S1 stress-test mode (your own bot)**
+
+Because the target is a bot you built, a deliberate load test is a legitimate use. `chatterg stress <url> <questions>` would add: `--concurrency N` (parallel requests), `--duration` or `--requests`, a ramp such as `--ramp 1..20 over 5m`, and a report with p50/p95/p99 latency, throughput over time, error rate by type and the load at which it first degrades. Guard rails: a required confirmation flag naming the target, a hard cap on concurrency, an automatic stop when the error rate crosses a threshold, and every request still saved. It is deliberately separate from `run`, which stays polite by default.
 
 ## 10a. Workflow improvements (requested by the maintainer)
 

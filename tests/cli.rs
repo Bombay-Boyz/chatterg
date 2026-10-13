@@ -1460,3 +1460,794 @@ mod friendly {
         assert!(!dir.path().join("questions.txt").exists());
     }
 }
+
+// ---- Ctrl+C, --rate, Retry-After, the ETA ---------------------------------------------------
+
+mod polite_and_stoppable {
+    use super::{chatterg, json, predicate};
+    use chatterg::storage::{Store, sqlite::SqliteStore};
+    use mockito::{Server, ServerGuard};
+    use std::{
+        io::{BufRead, BufReader, Read, Write},
+        net::TcpListener,
+        path::{Path, PathBuf},
+        process::{Child, Command, Stdio},
+        sync::mpsc::{self, Receiver},
+        time::{Duration, Instant},
+    };
+
+    fn write(dir: &Path, name: &str, body: &str) -> PathBuf {
+        let path = dir.join(name);
+        std::fs::write(&path, body).unwrap();
+        path
+    }
+
+    fn reply(text: &str) -> String {
+        json!({"jsonrpc": "2.0", "id": 1, "result": {"message": {"parts": [
+            {"kind": "text", "text": text}]}}})
+        .to_string()
+    }
+
+    async fn card_for(server: &mut ServerGuard, rpc_url: &str) -> mockito::Mock {
+        server
+            .mock("GET", "/.well-known/agent-card.json")
+            .with_status(200)
+            .with_body(
+                json!({"name": "Mock Agent", "supportedInterfaces": [
+                    {"url": rpc_url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
+                ]})
+                .to_string(),
+            )
+            .create_async()
+            .await
+    }
+
+    /// An agent whose replies take `delay`. The card is served by mockito; the
+    /// replies come from a tiny hand-made server so the delay is real.
+    struct SlowAgent {
+        _card: mockito::Mock,
+        server: ServerGuard,
+    }
+
+    impl SlowAgent {
+        fn url(&self) -> String {
+            self.server.url()
+        }
+    }
+
+    /// The receiver gets a message the moment a request has reached the agent, so a
+    /// test can send Ctrl+C when the question is genuinely in flight.
+    async fn slow_agent(delay: Duration, answer: &'static str) -> (SlowAgent, Receiver<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (arrived, requests) = mpsc::channel();
+
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let arrived = arrived.clone();
+                std::thread::spawn(move || {
+                    let mut buffer = [0u8; 8192];
+                    let _ = stream.read(&mut buffer);
+                    let _ = arrived.send(());
+                    std::thread::sleep(delay);
+                    let body = reply(answer);
+                    let _ = write!(
+                        stream,
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                });
+            }
+        });
+
+        let mut server = Server::new_async().await;
+        let card = card_for(&mut server, &format!("http://127.0.0.1:{port}/rpc")).await;
+
+        (SlowAgent { _card: card, server }, requests)
+    }
+
+    /// A running chatterg whose screen output can be watched line by line.
+    struct Running {
+        child: Child,
+        lines: Receiver<String>,
+        seen: Vec<String>,
+    }
+
+    impl Running {
+        fn start(dir: &Path, agent_url: &str, questions: &Path, extra: &[&str]) -> Self {
+            let program = chatterg().get_program().to_owned();
+
+            let mut child = Command::new(program)
+                .current_dir(dir)
+                .arg(agent_url)
+                .arg(questions)
+                .args(["--cooldown", "0", "--store"])
+                .arg(dir.join("c.db"))
+                .args(extra)
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap();
+
+            let (sender, lines) = mpsc::channel();
+            let stderr = child.stderr.take().unwrap();
+            std::thread::spawn(move || {
+                for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                    if sender.send(line).is_err() {
+                        break;
+                    }
+                }
+            });
+
+            Self { child, lines, seen: Vec::new() }
+        }
+
+        fn wait_for(&mut self, needle: &str, seconds: u64) {
+            let deadline = Instant::now() + Duration::from_secs(seconds);
+
+            while Instant::now() < deadline {
+                if let Ok(line) = self.lines.recv_timeout(Duration::from_millis(100)) {
+                    let found = line.contains(needle);
+                    self.seen.push(line);
+                    if found {
+                        return;
+                    }
+                }
+            }
+
+            let _ = self.child.kill();
+            panic!("never saw {needle:?}; saw {:#?}", self.seen);
+        }
+
+        fn interrupt(&self) {
+            let status =
+                Command::new("kill").args(["-INT", &self.child.id().to_string()]).status().unwrap();
+            assert!(status.success());
+        }
+
+        /// Waits for the process to end; fails the test if it takes longer than `seconds`.
+        fn finish(&mut self, seconds: u64) -> (Option<i32>, String) {
+            let deadline = Instant::now() + Duration::from_secs(seconds);
+
+            let code = loop {
+                if let Some(status) = self.child.try_wait().unwrap() {
+                    break status.code();
+                }
+                if Instant::now() > deadline {
+                    let _ = self.child.kill();
+                    panic!("chatterg did not stop within {seconds}s; saw {:#?}", self.seen);
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            };
+
+            std::thread::sleep(Duration::from_millis(100));
+            while let Ok(line) = self.lines.try_recv() {
+                self.seen.push(line);
+            }
+
+            (code, self.seen.join("\n"))
+        }
+    }
+
+    async fn saved_position(dir: &Path) -> usize {
+        SqliteStore::open_read_only(dir.join("c.db"))
+            .unwrap()
+            .load()
+            .await
+            .unwrap()
+            .unwrap()
+            .position
+    }
+
+    // ---- Ctrl+C ----------------------------------------------------------------------------
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn the_first_ctrl_c_finishes_the_question_being_asked_then_stops() {
+        let (agent, requests) = slow_agent(Duration::from_millis(1500), "slow answer").await;
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\nTwo?\n");
+
+        let mut run = Running::start(dir.path(), &agent.url(), &questions, &[]);
+        run.wait_for("[1/2] q001", 20);
+        requests.recv_timeout(Duration::from_secs(10)).expect("the request never arrived");
+        run.interrupt();
+        run.wait_for("finishing the question", 10);
+
+        let started = Instant::now();
+        let (code, screen) = run.finish(20);
+
+        assert_eq!(code, Some(130), "{screen}");
+        assert!(screen.contains("Stopped after 1 of 2 questions"), "{screen}");
+        assert!(screen.contains("Run the same command again to carry on"), "{screen}");
+        assert!(!screen.contains("error:"), "a stop is not an error:\n{screen}");
+        assert!(!screen.contains("[2/2]"), "question 2 must not be started");
+        assert!(
+            started.elapsed() >= Duration::from_millis(300),
+            "it waited for the in-flight answer"
+        );
+
+        assert_eq!(saved_position(dir.path()).await, 1);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn ctrl_c_during_the_pause_between_questions_stops_at_once() {
+        let mut server = Server::new_async().await;
+        let rpc_url = format!("{}/rpc", server.url());
+        let _card = card_for(&mut server, &rpc_url).await;
+        let _rpc = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(reply("Acme"))
+            .create_async()
+            .await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\nTwo?\n");
+
+        let mut run = Running::start(dir.path(), &server.url(), &questions, &["--delay", "300"]);
+        run.wait_for("[1/2] q001", 20);
+        std::thread::sleep(Duration::from_millis(700)); // question 1 is answered; now in the 300 s pause
+        run.interrupt();
+
+        let started = Instant::now();
+        let (code, screen) = run.finish(10);
+
+        assert_eq!(code, Some(130), "{screen}");
+        assert!(screen.contains("Stopped after 1 of 2 questions"), "{screen}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert_eq!(saved_position(dir.path()).await, 1);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_second_ctrl_c_stops_even_while_waiting_for_a_slow_bot() {
+        let (agent, requests) = slow_agent(Duration::from_secs(600), "never").await;
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\n");
+
+        let mut run = Running::start(dir.path(), &agent.url(), &questions, &[]);
+        run.wait_for("[1/1] q001", 20);
+        requests.recv_timeout(Duration::from_secs(10)).expect("the request never arrived");
+        run.interrupt();
+        run.wait_for("finishing the question", 10);
+        run.interrupt();
+
+        let (code, screen) = run.finish(10);
+
+        assert_eq!(code, Some(130), "{screen}");
+        assert!(screen.contains("Stopping now"), "{screen}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_polite_kill_is_treated_like_ctrl_c() {
+        let mut server = Server::new_async().await;
+        let rpc_url = format!("{}/rpc", server.url());
+        let _card = card_for(&mut server, &rpc_url).await;
+        let _rpc = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(reply("Acme"))
+            .create_async()
+            .await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\nTwo?\n");
+
+        let mut run = Running::start(dir.path(), &server.url(), &questions, &["--delay", "300"]);
+        run.wait_for("[1/2] q001", 20);
+        std::thread::sleep(Duration::from_millis(700));
+        Command::new("kill").args(["-TERM", &run.child.id().to_string()]).status().unwrap();
+
+        let (code, screen) = run.finish(10);
+
+        assert_eq!(code, Some(130), "{screen}");
+        assert_eq!(saved_position(dir.path()).await, 1);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn closing_the_terminal_stops_a_run_cleanly_too() {
+        let mut server = Server::new_async().await;
+        let rpc_url = format!("{}/rpc", server.url());
+        let _card = card_for(&mut server, &rpc_url).await;
+        let _rpc = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(reply("Acme"))
+            .create_async()
+            .await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\nTwo?\n");
+
+        let mut run = Running::start(dir.path(), &server.url(), &questions, &["--delay", "300"]);
+        run.wait_for("[1/2] q001", 20);
+        std::thread::sleep(Duration::from_millis(700));
+        Command::new("kill").args(["-HUP", &run.child.id().to_string()]).status().unwrap();
+
+        let (code, screen) = run.finish(10);
+
+        assert_eq!(code, Some(130), "{screen}");
+        assert_eq!(saved_position(dir.path()).await, 1);
+    }
+
+    #[test]
+    fn help_explains_stopping_and_the_new_switches() {
+        chatterg()
+            .arg("--help")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("130"))
+            .stdout(predicate::str::contains("Ctrl+C"))
+            .stdout(predicate::str::contains("--rate <N/UNIT>"))
+            .stdout(predicate::str::contains("--max-wait <SECONDS>"));
+
+        chatterg()
+            .args(["run", "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("--rate <N/UNIT>"))
+            .stdout(predicate::str::contains("--max-wait <SECONDS>"));
+    }
+
+    // ---- --rate -------------------------------------------------------------------------------
+
+    #[test]
+    fn a_bad_rate_is_refused_with_an_example() {
+        chatterg()
+            .args(["http://localhost:1", "questions.yaml", "--rate", "fast"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("expected a rate like 10/minute, 30/hour or 100/day"));
+    }
+
+    #[tokio::test]
+    async fn a_rate_spaces_the_requests() {
+        let mut server = Server::new_async().await;
+        let rpc_url = format!("{}/rpc", server.url());
+        let _card = card_for(&mut server, &rpc_url).await;
+        let _rpc = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(reply("Acme"))
+            .expect(3)
+            .create_async()
+            .await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\nTwo?\nThree?\n");
+
+        let started = Instant::now();
+        chatterg()
+            .current_dir(dir.path())
+            .arg(server.url())
+            .arg(&questions)
+            .args(["--rate", "4/second", "--store"])
+            .arg(dir.path().join("c.db"))
+            .assert()
+            .success();
+
+        // 4 per second = 250 ms apart, so three requests take at least half a second
+        assert!(started.elapsed() >= Duration::from_millis(480), "{:?}", started.elapsed());
+    }
+
+    // ---- the server's own advice ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn retry_after_is_obeyed_and_announced() {
+        let mut server = Server::new_async().await;
+        let rpc_url = format!("{}/rpc", server.url());
+        let _card = card_for(&mut server, &rpc_url).await;
+        let _limited = server
+            .mock("POST", "/rpc")
+            .with_status(429)
+            .with_header("retry-after", "1")
+            .expect(1)
+            .create_async()
+            .await;
+        let _ok = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(reply("Acme"))
+            .expect(1)
+            .create_async()
+            .await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\n");
+
+        let started = Instant::now();
+        chatterg()
+            .current_dir(dir.path())
+            .arg(server.url())
+            .arg(&questions)
+            .args(["--cooldown", "0", "--store"])
+            .arg(dir.path().join("c.db"))
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("the server asks us to wait 1s"))
+            .stderr(predicate::str::contains("pausing 1s"));
+
+        assert!(started.elapsed() >= Duration::from_millis(950), "{:?}", started.elapsed());
+    }
+
+    // ---- progress -----------------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn the_progress_line_shows_a_time_left_once_there_is_a_pace_to_measure() {
+        let mut server = Server::new_async().await;
+        let rpc_url = format!("{}/rpc", server.url());
+        let _card = card_for(&mut server, &rpc_url).await;
+        let _rpc = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(reply("Acme"))
+            .expect(4)
+            .create_async()
+            .await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\nTwo?\nThree?\nFour?\n");
+
+        chatterg()
+            .current_dir(dir.path())
+            .arg(server.url())
+            .arg(&questions)
+            .args(["--store"])
+            .arg(dir.path().join("c.db"))
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("[1/4] q001\n"))
+            .stderr(predicate::str::contains("[3/4] q003  (about "))
+            .stderr(predicate::str::contains(" left)"));
+    }
+}
+
+// ---- backups, rollback, rewind, damaged notebooks, closed terminals ---------------------------
+
+mod recovery_commands {
+    use super::{chatterg, json, predicate};
+    use mockito::{Mock, Server, ServerGuard};
+    use std::{
+        io::{BufRead, BufReader},
+        path::{Path, PathBuf},
+        process::{Command, Stdio},
+    };
+
+    async fn card(server: &mut ServerGuard) -> Mock {
+        let rpc_url = format!("{}/rpc", server.url());
+
+        server
+            .mock("GET", "/.well-known/agent-card.json")
+            .with_status(200)
+            .with_body(
+                json!({"name": "Mock Agent", "supportedInterfaces": [
+                    {"url": rpc_url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
+                ]})
+                .to_string(),
+            )
+            .create_async()
+            .await
+    }
+
+    fn reply(text: &str) -> String {
+        json!({"jsonrpc": "2.0", "id": 1, "result": {"message": {"parts": [
+            {"kind": "text", "text": text}]}}})
+        .to_string()
+    }
+
+    fn write(dir: &Path, name: &str, body: &str) -> PathBuf {
+        let path = dir.join(name);
+        std::fs::write(&path, body).unwrap();
+        path
+    }
+
+    /// The advanced form, keeping the notebook in `dir/c.db`.
+    fn run(dir: &Path, server: &ServerGuard, questions: &Path) -> assert_cmd::Command {
+        let mut command = chatterg();
+        command
+            .current_dir(dir)
+            .arg(server.url())
+            .arg(questions)
+            .args(["--cooldown", "0", "--max-waits", "0", "--store"])
+            .arg(dir.join("c.db"));
+        command
+    }
+
+    fn store_cmd(dir: &Path, words: &[&str]) -> assert_cmd::Command {
+        let mut command = chatterg();
+        command.current_dir(dir).args(words).arg("--store").arg(dir.join("c.db"));
+        command
+    }
+
+    /// A notebook with a run stopped after `answered` of the questions.
+    async fn stopped_run(dir: &Path, answered: usize, total: usize) -> PathBuf {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _ok = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(reply("Acme"))
+            .expect(answered)
+            .create_async()
+            .await;
+        let _limited = server.mock("POST", "/rpc").with_status(429).create_async().await;
+
+        let body: String = (1..=total).map(|n| format!("Question {n}?\n")).collect();
+        let questions = write(dir, "q.txt", &body);
+
+        run(dir, &server, &questions).assert().code(3);
+        questions
+    }
+
+    fn snapshot_names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<_> = std::fs::read_dir(dir.join("c.db.backups"))
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn version_is_printed() {
+        chatterg()
+            .arg("--version")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(env!("CARGO_PKG_VERSION")));
+    }
+
+    #[tokio::test]
+    async fn a_run_keeps_the_newest_automatic_backups_only() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _rpc = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(reply("Acme"))
+            .expect(4)
+            .create_async()
+            .await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\nTwo?\nThree?\nFour?\n");
+
+        run(dir.path(), &server, &questions)
+            .args(["--backup-every", "1", "--keep-backups", "2"])
+            .assert()
+            .success();
+
+        let names = snapshot_names(dir.path());
+        assert_eq!(names.len(), 2, "{names:?}");
+        assert!(names[0].ends_with("-q0003.db") && names[1].ends_with("-q0004.db"), "{names:?}");
+
+        store_cmd(dir.path(), &["backups"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("auto"))
+            .stdout(predicate::str::contains("q0004"));
+    }
+
+    #[tokio::test]
+    async fn backups_can_be_switched_off() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _rpc = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(reply("Acme"))
+            .expect(3)
+            .create_async()
+            .await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\nTwo?\nThree?\n");
+
+        run(dir.path(), &server, &questions).args(["--backup-every", "0"]).assert().success();
+
+        assert!(!dir.path().join("c.db.backups").exists());
+        store_cmd(dir.path(), &["backups"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("No backups yet"));
+    }
+
+    #[tokio::test]
+    async fn backup_rewind_and_rollback_work_together() {
+        let dir = tempfile::tempdir().unwrap();
+        stopped_run(dir.path(), 3, 5).await;
+
+        store_cmd(dir.path(), &["backup"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Backup saved:"))
+            .stdout(predicate::str::contains("after 3 questions"));
+
+        store_cmd(dir.path(), &["rewind", "--to", "2"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "Rewound to question 2: 2 answers will be asked again",
+            ))
+            .stdout(predicate::str::contains("kept as"));
+
+        store_cmd(dir.path(), &["backups"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("safety"))
+            .stdout(predicate::str::contains("manual"));
+
+        store_cmd(dir.path(), &["rollback"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Rolled back to the backup manual-"))
+            .stdout(predicate::str::contains("3 questions finished of 5"));
+
+        // and the notebook really is back at question 4 of 5
+        store_cmd(dir.path(), &["report", "--format", "json"])
+            .arg("--out")
+            .arg(dir.path().join("r.json"))
+            .assert()
+            .success();
+        let report: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.path().join("r.json")).unwrap())
+                .unwrap();
+        assert_eq!(report["summary"]["answered"], 3);
+    }
+
+    #[tokio::test]
+    async fn the_question_can_be_given_as_q040_and_wrong_numbers_are_explained() {
+        let dir = tempfile::tempdir().unwrap();
+        stopped_run(dir.path(), 2, 4).await;
+
+        store_cmd(dir.path(), &["rewind", "--to", "9"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("only questions 1 to 2 have been finished"));
+
+        store_cmd(dir.path(), &["rewind", "--to", "abc"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("expected a question number like 40 or q040"));
+
+        store_cmd(dir.path(), &["rewind", "--to", "q002"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Rewound to question 2"));
+    }
+
+    #[test]
+    fn rollback_without_any_backup_says_so() {
+        let dir = tempfile::tempdir().unwrap();
+
+        store_cmd(dir.path(), &["rollback"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("there are no backups for this notebook yet"));
+    }
+
+    #[tokio::test]
+    async fn a_damaged_notebook_is_explained_and_can_be_put_right_from_a_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let questions = stopped_run(dir.path(), 2, 4).await;
+
+        // no backup yet: the message says how to start fresh
+        let garbage = "garbage, long enough that it cannot be mistaken for a database header";
+        std::fs::write(dir.path().join("c.db"), garbage).unwrap();
+        let _ = std::fs::remove_file(dir.path().join("c.db-wal"));
+        let _ = std::fs::remove_file(dir.path().join("c.db-shm"));
+        let server = Server::new_async().await;
+        run(dir.path(), &server, &questions)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("is damaged"))
+            .stderr(predicate::str::contains("There are no backups of it"));
+
+        // restore a good notebook, back it up, damage it again
+        std::fs::remove_file(dir.path().join("c.db")).unwrap();
+        stopped_run(dir.path(), 2, 4).await;
+        store_cmd(dir.path(), &["backup"]).assert().success();
+        std::fs::write(dir.path().join("c.db"), garbage).unwrap();
+        let _ = std::fs::remove_file(dir.path().join("c.db-wal"));
+        let _ = std::fs::remove_file(dir.path().join("c.db-shm"));
+
+        let server2 = Server::new_async().await;
+        run(dir.path(), &server2, &questions)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("There is a backup: manual-"))
+            .stderr(predicate::str::contains("chatterg rollback --store"));
+
+        store_cmd(dir.path(), &["rollback"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("damaged notebook was moved aside"))
+            .stdout(predicate::str::contains("2 questions finished"));
+
+        let moved: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().contains(".damaged-"))
+            .collect();
+        assert_eq!(moved.len(), 1, "the damaged notebook is kept, never deleted");
+        assert!(std::fs::read_to_string(moved[0].path()).unwrap().starts_with("garbage"));
+    }
+
+    // ---- closed terminals and broken pipes --------------------------------------------------
+
+    #[cfg(unix)]
+    #[test]
+    fn a_broken_pipe_does_not_crash_the_program() {
+        let dir = tempfile::tempdir().unwrap();
+        let body: String =
+            (1..=5000).map(|n| format!("Question number {n} about zeolite membranes?\n")).collect();
+        let bank = write(dir.path(), "big.txt", &body);
+
+        let program = chatterg().get_program().to_owned();
+        let mut child = Command::new(program)
+            .args(["list", "--file"])
+            .arg(&bank)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        // like `chatterg list | head -1`: read one line, then hang up
+        let stdout = child.stdout.take().unwrap();
+        let mut first = String::new();
+        BufReader::new(stdout).read_line(&mut first).unwrap();
+        assert!(first.contains("5000 questions"), "{first}");
+
+        let output = child.wait_with_output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!stderr.contains("panicked") && !stderr.contains("failed printing"), "{stderr}");
+        assert_eq!(output.status.code(), Some(0));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_closed_terminal_does_not_crash_a_run() {
+        let mut server = Server::new_async().await;
+        let _card = card(&mut server).await;
+        let _rpc = server
+            .mock("POST", "/rpc")
+            .with_status(200)
+            .with_body(reply("Acme"))
+            .expect(2)
+            .create_async()
+            .await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let questions = write(dir.path(), "q.txt", "One?\nTwo?\n");
+        let program = chatterg().get_program().to_owned();
+
+        // `2>&-` closes the error output, as a vanished terminal would
+        let status = Command::new("sh")
+            .current_dir(dir.path())
+            .arg("-c")
+            .arg("exec \"$0\" \"$@\" 2>&-")
+            .arg(program)
+            .arg(server.url())
+            .arg(&questions)
+            .args(["--store"])
+            .arg(dir.path().join("c.db"))
+            .stdout(Stdio::null())
+            .status()
+            .unwrap();
+
+        assert_eq!(
+            status.code(),
+            Some(0),
+            "a run must finish even if nobody can read its messages"
+        );
+    }
+}

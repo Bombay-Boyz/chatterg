@@ -7,11 +7,15 @@ use std::{
 
 use async_trait::async_trait;
 use fs2::FileExt;
-use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
+use rusqlite::{Connection, ErrorCode, OpenFlags, OptionalExtension, params};
 
 use crate::domain::Conversation;
 
-use super::{StorageError, Store, migrate::migrate};
+use super::{
+    StorageError, Store,
+    backups::{self, BackupPolicy, Kind},
+    migrate::migrate,
+};
 
 const SCHEMA: &str = "
     CREATE TABLE IF NOT EXISTS conversations (
@@ -22,8 +26,57 @@ const SCHEMA: &str = "
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Automatic snapshots: where they go and how often.
+struct AutoBackups {
+    store_path: PathBuf,
+    policy: BackupPolicy,
+    /// The position a snapshot was last taken at, so retries of one question do
+    /// not produce a snapshot each.
+    last_position: Mutex<Option<usize>>,
+}
+
+impl AutoBackups {
+    /// Called right after a successful save. Returns a warning if a due snapshot
+    /// could not be written; that never stops the run.
+    fn after_save(&self, connection: &Connection, position: usize) -> Option<String> {
+        if position == 0 || position % self.policy.every != 0 {
+            return None;
+        }
+
+        let mut last = self.last_position.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if *last == Some(position) {
+            return None;
+        }
+        *last = Some(position);
+
+        let path = backups::unused_path(&self.store_path, Kind::Auto, chrono::Utc::now(), position);
+
+        let result = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .map_err(|error| error.to_string())
+            .and_then(|()| {
+                connection
+                    .execute("VACUUM INTO ?1", params![path.to_string_lossy()])
+                    .map(|_| ())
+                    .map_err(|error| error.to_string())
+            });
+
+        match result {
+            Ok(()) => {
+                backups::prune(&self.store_path, self.policy.keep);
+                None
+            }
+            Err(error) => Some(format!("could not write a backup to {}: {error}", path.display())),
+        }
+    }
+}
+
 pub struct SqliteStore {
     connection: Arc<Mutex<Connection>>,
+
+    backups: Option<Arc<AutoBackups>>,
+    warnings: Arc<Mutex<Vec<String>>>,
 
     /// Held for as long as the store lives; the OS releases it when this drops
     /// (or the process dies), so a crash never leaves a stale lock.
@@ -32,6 +85,19 @@ pub struct SqliteStore {
 
 fn database(error: rusqlite::Error) -> StorageError {
     StorageError::Database(Box::new(error))
+}
+
+/// A notebook that is not a database at all, or whose pages are broken.
+fn damage(path: &Path, error: &rusqlite::Error) -> Option<StorageError> {
+    let broken = matches!(
+        error.sqlite_error_code(),
+        Some(ErrorCode::NotADatabase | ErrorCode::DatabaseCorrupt)
+    );
+
+    broken.then(|| StorageError::Damaged {
+        path: path.display().to_string(),
+        detail: error.to_string(),
+    })
 }
 
 fn lock_path(path: &Path) -> PathBuf {
@@ -73,12 +139,25 @@ impl SqliteStore {
         // leaves the previous state intact.
         connection
             .query_row("PRAGMA journal_mode = WAL", [], |row| row.get::<_, String>(0))
-            .map_err(|error| open_error(Box::new(error)))?;
+            .map_err(|error| damage(path, &error).unwrap_or_else(|| open_error(Box::new(error))))?;
+
+        // Every save reaches the disk before the next question is asked, so a power
+        // cut loses at most the answer that was being written.
         connection
-            .execute_batch("PRAGMA synchronous = NORMAL;")
+            .execute_batch("PRAGMA synchronous = FULL;")
             .map_err(|error| open_error(Box::new(error)))?;
 
-        Self::initialise(connection, Some(lock), |error| open_error(Box::new(error)))
+        let health: String = connection
+            .query_row("PRAGMA quick_check(1)", [], |row| row.get(0))
+            .map_err(|error| damage(path, &error).unwrap_or_else(|| open_error(Box::new(error))))?;
+
+        if health != "ok" {
+            return Err(StorageError::Damaged { path: path.display().to_string(), detail: health });
+        }
+
+        Self::initialise(connection, Some(lock), |error| {
+            damage(path, &error).unwrap_or_else(|| open_error(Box::new(error)))
+        })
     }
 
     /// Opens an existing notebook for reading only. It takes no lock and never
@@ -105,13 +184,13 @@ impl SqliteStore {
                 [],
                 |row| row.get(0),
             )
-            .map_err(|error| open_error(Box::new(error)))?;
+            .map_err(|error| damage(path, &error).unwrap_or_else(|| open_error(Box::new(error))))?;
 
         if !has_table {
             return Err(open_error("this file is not a chatterg notebook".into()));
         }
 
-        Ok(Self { connection: Arc::new(Mutex::new(connection)), _lock: None })
+        Ok(Self::from_connection(connection, None))
     }
 
     pub fn memory() -> Result<Self, StorageError> {
@@ -127,7 +206,59 @@ impl SqliteStore {
         connection.busy_timeout(BUSY_TIMEOUT).map_err(database)?;
         connection.execute_batch(SCHEMA).map_err(on_error)?;
 
-        Ok(Self { connection: Arc::new(Mutex::new(connection)), _lock: lock })
+        Ok(Self::from_connection(connection, lock))
+    }
+
+    fn from_connection(connection: Connection, lock: Option<File>) -> Self {
+        Self {
+            connection: Arc::new(Mutex::new(connection)),
+            backups: None,
+            warnings: Arc::new(Mutex::new(Vec::new())),
+            _lock: lock,
+        }
+    }
+
+    /// Turns on automatic snapshots next to the notebook at `store_path`.
+    pub fn with_backups(mut self, store_path: impl Into<PathBuf>, policy: BackupPolicy) -> Self {
+        if policy.is_on() {
+            self.backups = Some(Arc::new(AutoBackups {
+                store_path: store_path.into(),
+                policy,
+                last_position: Mutex::new(None),
+            }));
+        }
+
+        self
+    }
+
+    /// Writes a snapshot of the notebook to `path` (a complete, consistent copy). Works
+    /// on a notebook opened read-only, so it is safe during a run.
+    pub fn snapshot_to(&self, path: &Path) -> Result<(), StorageError> {
+        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| StorageError::Database(Box::new(error)))?;
+        }
+
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::Internal("connection lock poisoned".into()))?;
+
+        connection.execute("VACUUM INTO ?1", params![path.to_string_lossy()]).map_err(database)?;
+
+        Ok(())
+    }
+
+    /// Whether a conversation is stored at all.
+    pub fn has_conversation(&self) -> Result<bool, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::Internal("connection lock poisoned".into()))?;
+
+        connection
+            .query_row("SELECT COUNT(*) > 0 FROM conversations", [], |row| row.get(0))
+            .map_err(database)
     }
 
     /// Copies the database to `backup` and then forgets the stored conversation, so
@@ -160,7 +291,10 @@ impl SqliteStore {
 impl Store for SqliteStore {
     async fn save(&self, conversation: &Conversation) -> Result<(), StorageError> {
         let data = serde_json::to_string(conversation).map_err(StorageError::Serialize)?;
+        let position = conversation.position;
         let connection = Arc::clone(&self.connection);
+        let backups = self.backups.clone();
+        let warnings = Arc::clone(&self.warnings);
 
         tokio::task::spawn_blocking(move || {
             let connection = connection
@@ -176,10 +310,22 @@ impl Store for SqliteStore {
                 )
                 .map_err(database)?;
 
+            if let Some(warning) =
+                backups.as_ref().and_then(|backups| backups.after_save(&connection, position))
+            {
+                warnings.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(warning);
+            }
+
             Ok(())
         })
         .await
         .map_err(|error| StorageError::Internal(error.to_string()))?
+    }
+
+    fn take_warnings(&self) -> Vec<String> {
+        std::mem::take(
+            &mut *self.warnings.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
     }
 
     async fn load(&self) -> Result<Option<Conversation>, StorageError> {

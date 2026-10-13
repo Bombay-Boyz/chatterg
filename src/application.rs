@@ -1,13 +1,18 @@
-use std::{future::Future, sync::Arc, time::Duration};
+use std::{
+    future::Future,
+    sync::{Arc, Mutex, PoisonError},
+    time::Duration,
+};
 
 use chrono::Utc;
 use thiserror::Error;
 use url::Url;
 
 use crate::{
+    cancel::Cancel,
     domain::{
-        AgentInfo, CooldownEvent, DomainError, Engine, EngineState, Question, Questionnaire,
-        Submission, Timestamp, Timing,
+        AgentInfo, Conversation, CooldownEvent, DomainError, Engine, EngineState, Question,
+        Questionnaire, Submission, Timestamp, Timing,
     },
     storage::{StorageError, Store},
     transport::{Message, Transport, TransportError},
@@ -16,6 +21,12 @@ use crate::{
 /// Replies shorter than this may be a rate-limit notice; longer ones are real
 /// answers (which can legitimately mention e.g. a "rate-limiting step").
 const RATE_LIMIT_NOTICE_MAX_LEN: usize = 400;
+
+/// The longest pause the outage back-off grows to.
+const OUTAGE_PAUSE_CAP: Duration = Duration::from_secs(600);
+
+/// How many times saving progress is tried before the run stops.
+const SAVE_ATTEMPTS: usize = 3;
 
 pub const DEFAULT_RATE_LIMIT_PHRASES: &[&str] =
     &["rate limit", "rate-limit", "too many requests", "try again later", "slow down"];
@@ -36,13 +47,46 @@ pub enum ApplicationError {
 
     #[error("agent still unavailable after {waits} cooldowns; last problem: {last}")]
     AgentUnavailable { waits: usize, last: String },
+
+    /// The user asked to stop (Ctrl+C). Everything answered so far is saved.
+    #[error("stopped at the user's request")]
+    Interrupted,
+
+    #[error(
+        "could not save your progress after {attempts} tries: {source}. Free some disk space or \
+         check that the folder can be written to, then run the same command again. Everything \
+         saved earlier is safe."
+    )]
+    CouldNotSave {
+        attempts: usize,
+        #[source]
+        source: StorageError,
+    },
 }
 
 /// Something worth telling a human who is watching the run.
 #[derive(Debug, Clone)]
 pub enum Progress {
-    Asking { number: usize, total: usize, id: String, attempt: usize },
-    Waiting { reason: String, wait: usize, max_waits: usize, cooldown: Duration },
+    Asking {
+        number: usize,
+        total: usize,
+        id: String,
+        attempt: usize,
+    },
+    Waiting {
+        reason: String,
+        wait: usize,
+        max_waits: usize,
+        cooldown: Duration,
+    },
+    /// A request finally went through after `waits` pauses totalling `paused`.
+    Resumed {
+        waits: usize,
+        paused: Duration,
+    },
+    /// Something went wrong that did not stop the run (for example a backup that
+    /// could not be written).
+    Warning(String),
 }
 
 pub type ProgressCallback = Arc<dyn Fn(&Progress) + Send + Sync>;
@@ -68,6 +112,22 @@ pub struct RunOptions {
     pub force_resume: bool,
 
     pub clock: Clock,
+
+    /// The longest pause the *server* may ask for (`Retry-After` and friends). A
+    /// `cooldown` you set yourself is never shortened by this.
+    pub max_wait: Duration,
+
+    /// The least time to leave between requests, so a run stays under a known
+    /// limit instead of hitting it. Set from `--rate "30/hour"`.
+    pub min_interval: Option<Duration>,
+
+    /// Set this to stop the run cleanly: the question being asked is finished and
+    /// saved, then the run returns `ApplicationError::Interrupted`.
+    pub cancel: Cancel,
+
+    /// How long to wait between tries when saving progress fails (disk full, a
+    /// network drive that blinked). Saving is tried three times before giving up.
+    pub save_retry_pause: Duration,
 }
 
 impl Default for RunOptions {
@@ -83,6 +143,10 @@ impl Default for RunOptions {
             on_progress: None,
             force_resume: false,
             clock: Arc::new(Utc::now),
+            max_wait: Duration::from_secs(3600),
+            min_interval: None,
+            cancel: Cancel::default(),
+            save_retry_pause: Duration::from_secs(1),
         }
     }
 }
@@ -107,9 +171,125 @@ impl RunOptions {
         self.rate_limit_phrases.iter().any(|phrase| lowered.contains(&phrase.to_lowercase()))
     }
 
+    /// How long to pause after a failure: our own cooldown, or longer if the
+    /// server asked for longer (but never more than `max_wait` for a server's wish).
+    ///
+    /// While the connection itself keeps failing (`outage_streak` failures in a row)
+    /// the pause doubles each time, up to ten minutes, so a long outage is not
+    /// hammered every two minutes.
+    pub fn pause_for(&self, server_hint: Option<Duration>, outage_streak: usize) -> Duration {
+        let base = if outage_streak > 1 {
+            let doublings = u32::try_from(outage_streak - 1).unwrap_or(u32::MAX).min(10);
+
+            self.cooldown.saturating_mul(1 << doublings).min(self.cooldown.max(OUTAGE_PAUSE_CAP))
+        } else {
+            self.cooldown
+        };
+
+        let wanted = base.max(server_hint.unwrap_or_default());
+
+        wanted.min(self.max_wait.max(base))
+    }
+
     fn is_transient(&self, error: &TransportError) -> bool {
         error.is_transient()
             || matches!(error, TransportError::Protocol { message, .. } if self.looks_rate_limited(message))
+    }
+}
+
+/// Saves progress, trying again a couple of times if the disk hiccups. Warnings the
+/// store collected (a backup that failed, say) are passed on to the user.
+async fn persist<S: Store>(
+    store: &S,
+    conversation: &Conversation,
+    options: &RunOptions,
+) -> Result<(), ApplicationError> {
+    let mut attempt = 1;
+
+    loop {
+        match store.save(conversation).await {
+            Ok(()) => {
+                for warning in store.take_warnings() {
+                    options.notify(Progress::Warning(warning));
+                }
+                return Ok(());
+            }
+            Err(source) if attempt >= SAVE_ATTEMPTS => {
+                return Err(ApplicationError::CouldNotSave { attempts: attempt, source });
+            }
+            Err(_) => {
+                attempt += 1;
+                pause(options, options.save_retry_pause).await?;
+            }
+        }
+    }
+}
+
+/// Turns a rate such as `30/hour` into the gap to leave between requests (here
+/// two minutes). Units: second, minute, hour, day (and their short forms).
+pub fn parse_rate(text: &str) -> Result<Duration, String> {
+    let bad = || format!("expected a rate like 10/minute, 30/hour or 100/day, not \"{text}\"");
+
+    let (count, unit) = text.split_once('/').ok_or_else(bad)?;
+    let count: u32 = count.trim().parse().map_err(|_| bad())?;
+
+    if count == 0 {
+        return Err(bad());
+    }
+
+    let seconds: u64 = match unit.trim().to_ascii_lowercase().as_str() {
+        "s" | "sec" | "second" | "seconds" => 1,
+        "m" | "min" | "minute" | "minutes" => 60,
+        "h" | "hr" | "hour" | "hours" => 3600,
+        "d" | "day" | "days" => 86_400,
+        _ => return Err(bad()),
+    };
+
+    Ok(Duration::from_secs(seconds) / count)
+}
+
+/// Sleeps, but wakes at once if the user asks to stop.
+async fn pause(options: &RunOptions, duration: Duration) -> Result<(), ApplicationError> {
+    tokio::select! {
+        biased;
+        () = options.cancel.cancelled() => Err(ApplicationError::Interrupted),
+        () = tokio::time::sleep(duration) => Ok(()),
+    }
+}
+
+/// Keeps requests at least `interval` apart.
+struct Pacer {
+    interval: Duration,
+    next: Mutex<tokio::time::Instant>,
+}
+
+impl Pacer {
+    /// `last_sent` is when the previous session sent its last request, so a run that
+    /// was stopped a moment ago does not start again straight away.
+    fn new(options: &RunOptions, last_sent: Option<Timestamp>) -> Option<Self> {
+        let interval = options.min_interval?;
+
+        let owed = last_sent
+            .and_then(|sent| {
+                let due = sent + chrono::Duration::from_std(interval).ok()?;
+                (due - options.now()).to_std().ok()
+            })
+            .unwrap_or(Duration::ZERO);
+
+        Some(Self { interval, next: Mutex::new(tokio::time::Instant::now() + owed) })
+    }
+
+    async fn wait_turn(&self, options: &RunOptions) -> Result<(), ApplicationError> {
+        let wait = {
+            let mut next = self.next.lock().unwrap_or_else(PoisonError::into_inner);
+            let now = tokio::time::Instant::now();
+            let slot = (*next).max(now);
+
+            *next = slot + self.interval;
+            slot - now
+        };
+
+        pause(options, wait).await
     }
 }
 
@@ -160,15 +340,24 @@ where
 
     engine.begin(options.now());
 
+    let last_sent = engine
+        .conversation()
+        .answers
+        .iter()
+        .flat_map(|record| record.attempts.iter())
+        .filter_map(|attempt| attempt.sent_at)
+        .max();
+    let pacer = Pacer::new(options, last_sent);
+
     let mut events = Vec::new();
     let discovered =
-        with_cooldown(options, &mut events, || transport.discover(&target), |_| None).await;
+        with_cooldown(options, None, &mut events, || transport.discover(&target), |_| None).await;
     engine.record_cooldowns(std::mem::take(&mut events));
 
     let capabilities = match discovered {
         Ok((capabilities, _)) => capabilities,
         Err(error) => {
-            store.save(engine.conversation()).await?;
+            persist(store.as_ref(), engine.conversation(), options).await?;
             return Err(error);
         }
     };
@@ -188,10 +377,15 @@ where
             EngineState::Asking(question) => question,
             EngineState::Ready | EngineState::Complete | EngineState::Aborted => {
                 let engine = engine.finish(options.now());
-                store.save(engine.conversation()).await?;
+                persist(store.as_ref(), engine.conversation(), options).await?;
                 return Ok(engine);
             }
         };
+
+        if options.cancel.is_cancelled() {
+            persist(store.as_ref(), engine.conversation(), options).await?;
+            return Err(ApplicationError::Interrupted);
+        }
 
         let attempt =
             engine.conversation().answer(&question.id).map_or(0, |record| record.attempts.len())
@@ -212,6 +406,7 @@ where
         // The same message (and id) is re-sent after a cooldown: it was never answered.
         let sent = with_cooldown(
             options,
+            pacer.as_ref(),
             &mut events,
             || transport.send(&endpoint, message.clone()),
             |response| {
@@ -228,24 +423,24 @@ where
             Ok(done) => done,
             Err(error) => {
                 // Keep the cooldown log even though the run is giving up.
-                store.save(engine.conversation()).await?;
+                persist(store.as_ref(), engine.conversation(), options).await?;
                 return Err(error);
             }
         };
 
         match engine.submit_timed(response.text, timing) {
             Submission::Next(next, _) | Submission::Retry(next, _) => {
-                store.save(next.conversation()).await?;
+                persist(store.as_ref(), next.conversation(), options).await?;
                 engine = next;
 
                 if !options.delay.is_zero() {
-                    tokio::time::sleep(options.delay).await;
+                    pause(options, options.delay).await?;
                 }
             }
 
             Submission::Aborted(next) | Submission::Unknown(next) | Submission::Complete(next) => {
                 let next = next.finish(options.now());
-                store.save(next.conversation()).await?;
+                persist(store.as_ref(), next.conversation(), options).await?;
                 return Ok(next);
             }
         }
@@ -258,6 +453,7 @@ where
 /// anything else is returned immediately.
 async fn with_cooldown<T, F, Fut>(
     options: &RunOptions,
+    pacer: Option<&Pacer>,
     events: &mut Vec<CooldownEvent>,
     mut operation: F,
     rejected: impl Fn(&T) -> Option<String>,
@@ -267,18 +463,43 @@ where
     Fut: Future<Output = Result<T, TransportError>>,
 {
     let mut waits = 0;
+    let mut outage_streak = 0;
+    let mut paused = Duration::ZERO;
 
     loop {
+        if options.cancel.is_cancelled() {
+            return Err(ApplicationError::Interrupted);
+        }
+        if let Some(pacer) = pacer {
+            pacer.wait_turn(options).await?;
+        }
+
         let sent_at = options.now();
         let outcome = operation().await;
         let received_at = options.now();
 
-        let reason = match outcome {
+        let (reason, server_hint) = match outcome {
             Ok(value) => match rejected(&value) {
-                None => return Ok((value, Timing::new(sent_at, received_at))),
-                Some(reason) => reason,
+                None => {
+                    if waits > 0 {
+                        options.notify(Progress::Resumed { waits, paused });
+                    }
+                    return Ok((value, Timing::new(sent_at, received_at)));
+                }
+                Some(reason) => {
+                    outage_streak = 0;
+                    (reason, None)
+                }
             },
-            Err(error) if options.is_transient(&error) => error.to_string(),
+            Err(error) if options.is_transient(&error) => {
+                outage_streak = if error.is_outage() { outage_streak + 1 } else { 0 };
+
+                let hint = match &error {
+                    TransportError::RetryLater { retry_after, .. } => Some(*retry_after),
+                    _ => None,
+                };
+                (error.to_string(), hint)
+            }
             Err(error) => return Err(error.into()),
         };
 
@@ -287,19 +508,21 @@ where
         }
 
         waits += 1;
+        let pause_length = options.pause_for(server_hint, outage_streak);
+        paused += pause_length;
         events.push(CooldownEvent {
             at: received_at,
             reason: reason.clone(),
-            seconds: options.cooldown.as_secs(),
+            seconds: pause_length.as_secs(),
         });
         options.notify(Progress::Waiting {
             reason,
             wait: waits,
             max_waits: options.max_waits,
-            cooldown: options.cooldown,
+            cooldown: pause_length,
         });
 
-        tokio::time::sleep(options.cooldown).await;
+        pause(options, pause_length).await?;
     }
 }
 

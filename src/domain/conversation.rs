@@ -178,6 +178,16 @@ impl Conversation {
         copy
     }
 
+    /// Forgets every question from `index` (0-based) onwards, so they are asked
+    /// again as if they had never been asked. Earlier answers are untouched.
+    pub fn rewind_to(&mut self, index: usize) {
+        self.answers.truncate(index);
+        self.position = index;
+        self.state = State::Ready;
+        self.finished_at = None;
+        self.messages_sent = self.answers.iter().map(|record| record.attempts.len() as u64).sum();
+    }
+
     pub fn answer(&self, question_id: &QuestionId) -> Option<&AnswerRecord> {
         self.answers.iter().find(|answer| &answer.question_id == question_id)
     }

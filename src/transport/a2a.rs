@@ -1,12 +1,17 @@
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
+use reqwest::header::HeaderMap;
+
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
 
-use super::{Capabilities, Message, Protocol, Response, Transport, TransportError};
+use super::{
+    Capabilities, Message, Protocol, Response, Transport, TransportError, is_transient_status,
+};
 
 const A2A_VERSION: &str = "1.0";
 const SEND_METHOD: &str = "message/send";
@@ -85,18 +90,84 @@ impl Default for A2aTransport {
     }
 }
 
+/// Why a request never got an answer, in words a person can act on.
+#[derive(Debug, thiserror::Error)]
+enum NetworkFailure {
+    #[error("the bot did not answer in time (timed out)")]
+    Timeout(#[source] reqwest::Error),
+
+    #[error("could not connect to the bot; the internet connection or the bot may be down")]
+    Unreachable(#[source] reqwest::Error),
+
+    #[error("network problem: {0}")]
+    Other(#[source] reqwest::Error),
+}
+
 fn network(error: reqwest::Error) -> TransportError {
-    TransportError::Network(Box::new(error))
+    let failure = if error.is_timeout() {
+        NetworkFailure::Timeout(error)
+    } else if error.is_connect() {
+        NetworkFailure::Unreachable(error)
+    } else {
+        NetworkFailure::Other(error)
+    };
+
+    TransportError::Network(Box::new(failure))
 }
 
 fn check_status(response: reqwest::Response) -> Result<reqwest::Response, TransportError> {
     let status = response.status();
 
     if status.is_success() {
-        Ok(response)
-    } else {
-        Err(TransportError::Http { status: status.as_u16() })
+        return Ok(response);
     }
+
+    let status = status.as_u16();
+
+    if is_transient_status(status)
+        && let Some(retry_after) = wait_hint(response.headers(), Utc::now())
+    {
+        return Err(TransportError::RetryLater { status, retry_after });
+    }
+
+    Err(TransportError::Http { status })
+}
+
+/// How long the server asked us to wait, from its response headers.
+///
+/// In order of preference: `Retry-After` (seconds or an HTTP date), the standard
+/// `RateLimit-Reset` (seconds from now) and the common `X-RateLimit-Reset`
+/// (seconds from now, or a Unix timestamp when the number is that large).
+/// Anything unreadable is ignored.
+pub fn wait_hint(headers: &HeaderMap, now: DateTime<Utc>) -> Option<Duration> {
+    let text = |name: &str| headers.get(name)?.to_str().ok().map(str::trim);
+    let until =
+        |when: DateTime<Utc>| Duration::from_secs((when - now).num_seconds().max(0).unsigned_abs());
+
+    if let Some(value) = text("retry-after") {
+        if let Ok(seconds) = value.parse::<u64>() {
+            return Some(Duration::from_secs(seconds));
+        }
+
+        if let Ok(date) = DateTime::parse_from_rfc2822(value) {
+            return Some(until(date.with_timezone(&Utc)));
+        }
+    }
+
+    if let Some(seconds) = text("ratelimit-reset").and_then(|value| value.parse::<u64>().ok()) {
+        return Some(Duration::from_secs(seconds));
+    }
+
+    if let Some(number) = text("x-ratelimit-reset").and_then(|value| value.parse::<i64>().ok()) {
+        // a Unix timestamp has ten digits; a delay in seconds is far smaller
+        return if number > 1_000_000_000 {
+            DateTime::from_timestamp(number, 0).map(until)
+        } else {
+            Some(Duration::from_secs(number.max(0).unsigned_abs()))
+        };
+    }
+
+    None
 }
 
 impl A2aTransport {

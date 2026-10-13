@@ -34,6 +34,9 @@ pub enum StorageError {
     )]
     Locked { path: String },
 
+    #[error("the notebook {path} is damaged ({detail})")]
+    Damaged { path: String, detail: String },
+
     #[error("storage internal error: {0}")]
     Internal(String),
 }
@@ -43,7 +46,14 @@ pub trait Store: Send + Sync {
     async fn save(&self, conversation: &Conversation) -> Result<(), StorageError>;
 
     async fn load(&self) -> Result<Option<Conversation>, StorageError>;
+
+    /// Problems the store hit that did not stop it working (for example a backup
+    /// that could not be written). Returned once; the run shows them to the user.
+    fn take_warnings(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
+pub mod backups;
 pub mod migrate;
 pub mod sqlite;

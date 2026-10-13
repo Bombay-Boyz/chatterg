@@ -160,3 +160,5 @@ id_ed25519.pub
 
 # chatterg run lock file
 *.db.lock
+*.db.backups/
+*.damaged-*

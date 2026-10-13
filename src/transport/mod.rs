@@ -51,6 +51,11 @@ pub enum TransportError {
     #[error("HTTP request failed with status {status}")]
     Http { status: u16 },
 
+    /// The server answered "not now" and said how long to wait (`Retry-After` and
+    /// similar headers).
+    #[error("HTTP request failed with status {status} (the server asks us to wait {}s)", retry_after.as_secs())]
+    RetryLater { status: u16, retry_after: std::time::Duration },
+
     #[error("agent returned a protocol error ({code}): {message}")]
     Protocol { code: i64, message: String },
 
@@ -67,13 +72,25 @@ pub enum TransportError {
     Internal(String),
 }
 
+/// Statuses that mean "try again later" rather than "your request is wrong".
+pub fn is_transient_status(status: u16) -> bool {
+    matches!(status, 408 | 425 | 429 | 500..=599)
+}
+
 impl TransportError {
+    /// The connection itself failed (the internet or the bot is down), as opposed to
+    /// the bot answering with an error.
+    pub fn is_outage(&self) -> bool {
+        matches!(self, Self::Unreachable | Self::Network(_))
+    }
+
     /// Failures that say "the agent can't answer right now" rather than "the
     /// request is wrong": connection problems, timeouts, rate limiting, 5xx.
     pub fn is_transient(&self) -> bool {
         match self {
             Self::Unreachable | Self::Network(_) => true,
-            Self::Http { status } => matches!(status, 408 | 425 | 429 | 500..=599),
+            Self::Http { status } => is_transient_status(*status),
+            Self::RetryLater { .. } => true,
             _ => false,
         }
     }
